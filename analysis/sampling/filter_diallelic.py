@@ -6,7 +6,6 @@ python3.5 filter_diallelic.py [input vcf] [output vcf]
 
 '''
 
-
 import sys
 from cyvcf2 import VCF, Writer
 from tqdm import tqdm
