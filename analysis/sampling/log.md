@@ -207,3 +207,9 @@ for i in {1..17}; do
     tabix chromosome_${i}.vcf.gz ;
 done
 ```
+
+
+
+
+
+
