@@ -153,6 +153,88 @@ running this over block = 5:
 time bash run_ldhelmet.sh 5
 ```
 
+## 2/6/2019
+
+done - interesting how the entire genome took 600 min, while the shorter
+simulations took far, far longer
+
+running LDhelmet for block = 100
+
+```bash
+time bash run_ldhelmet.sh 100
+```
+
+when this is done - summarise using `find_hotspots.py`
+1. get new hotspot stats
+2. find where hotspots are preferentially located (using annotation table)
+3. do general correlates analysis
+4. estimate rate of sexual reproduction using Liu et al method
+
+## 4/6/2019
+
+this took way longer - 1465 min for the whole genome - looks like it's a block
+penalty thing
+
+summarising using `find_hotspots.py` (from `ldhelmet-sims` dir) 
+using window = 2kb and flank = 60kb:
+
+```bash
+for block in 5 100; do
+    for i in {1..17}; do
+        echo "currently on chromosome ${i} for block ${block}"
+        python3.5 analysis/ldhelmet/find_hotspots.py \
+        --input data/ldhelmet/block_${block}/chromosome_${i}.txt \
+        --out data/ldhelmet/block_${block}/chromosome_${i}_summarised.txt \
+        --chr chromosome_${i} \
+        --block 2000 \
+        --flank 60000 ;
+    done
+done
+```
+
+genomewide rho value:
+
+```R
+library(readr)
+library(magrittr)
+library(dplyr)
+library(purrr)
+library(fs)
+
+
+fnames <- dir_ls(pattern = 'chromosome_[0-9]{1,2}_summarised.txt')
+
+d <- fnames %>%
+    map(~ read_csv(., col_types = cols()) %>%
+            select(start = block_start, end = block_end)
+        )
+
+non_overlapping <- function(df, windowsize) {
+  df %<>%
+      mutate(div = floor(start / windowsize), div2 = lead(div)) %>%
+      filter(div == div2) %>%
+      select(-contains('div'))
+    return(df)
+}
+
+final <- d %>%
+    map_dfr(~ non_overlapping(., 2000), .id = 'name') %>%
+    summarise(mean_rho = mean(block_rate, na.rm = TRUE))
+
+# A tibble: 1 x 1
+# mean_rho
+# <dbl>
+# 1  0.00409
+
+# exact value
+> final$mean_rho
+[1] 0.004086864
+```
+
+
+
+
+
 
 
 
