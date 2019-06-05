@@ -140,17 +140,22 @@ looks good - now for fits:
 library(readr)
 library(dplyr)
 library(stringr)
+library(magrittr)
 library(fs)
+library(purrr)
 
 fnames <- dir_ls(regexp = 'chromosome_[0-9]{1,2}\\.csv')
 
 weir_hill <- function(fname) {
+
+    chrname <- str_extract(fname, 'chromosome_[0-9]{1,2}')
+    outname <- paste0(chrname, '_fit.csv')
     equation <- '((10 + p*d)/(22 + (13*p*d) + (p*d)^2))*(1 + (((3 + (p*d))/(24*(22 + (13*p*d) +\
                    (p*d)^2))) * (12 + (12*p*d) + (p*d)^2)))' %>%
                    str_replace(., '\\n', '') %>%
                    str_replace(' {2,}', '')
 
-    d <- read_csv(fname) %>%
+    d <- read_csv(fname, col_types = cols()) %>%
         mutate(d = abs(pos2 - pos1)) %>%
         select(d, r2)
     predicted_decay <- nls(
@@ -159,9 +164,67 @@ weir_hill <- function(fname) {
         ) %>%
         predict() %>%
         as_tibble()
+    colnames(predicted_decay) <- 'r2'
+    predicted_decay$d <- d$d
+    
+    predicted_decay %<>%
+        group_by(d) %>%
+        summarise(r2 = mean(r2)) %>%
+        arrange(d) %>%
+        mutate(chrom = chrname) %>%
+        select(chrom, d, r2)
 
+    write_csv(predicted_decay, outname)
+}
+
+fnames %>%
+    walk(~ weir_hill(.))
+```
+
+and finally, getting the fitted rho values:
 
 ```
+library(readr)
+library(dplyr)
+library(stringr)
+library(magrittr)
+library(fs)
+library(purrr)
+library(broom)
+
+fnames <- dir_ls(regexp = 'chromosome_[0-9]{1,2}\\.csv')
+
+weir_hill_rho <- function(fname) {
+
+    chrname <- str_extract(fname, 'chromosome_[0-9]{1,2}')
+    outname <- paste0(chrname, '_fit.csv')
+    equation <- '((10 + p*d)/(22 + (13*p*d) + (p*d)^2))*(1 + (((3 + (p*d))/(24*(22 + (13*p*d) +\
+                   (p*d)^2))) * (12 + (12*p*d) + (p*d)^2)))' %>%
+                   str_replace(., '\\n', '') %>%
+                   str_replace(' {2,}', '')
+
+    d <- read_csv(fname, col_types = cols()) %>%
+        mutate(d = abs(pos2 - pos1)) %>%
+        select(d, r2)
+
+    fit <- nls(
+            paste('r2', '~', equation),
+            data = d, control = list(maxiter = 500), start = list(p = 0.5)) %>%
+            tidy() %>%
+            mutate(chrom = chrname) %>%
+            select(chrom, everything())
+
+    message(chrname)
+    return(fit)
+
+}
+
+d_final <- fnames %>%
+    map_dfr(~ weir_hill_rho(.))
+
+write_csv(d_final, 'fitted_rho.csv')
+```
+
 
 
 
