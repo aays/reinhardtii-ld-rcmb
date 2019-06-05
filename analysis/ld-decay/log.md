@@ -183,7 +183,7 @@ fnames %>%
 
 and finally, getting the fitted rho values:
 
-```
+```R
 library(readr)
 library(dplyr)
 library(stringr)
@@ -225,6 +225,8 @@ d_final <- fnames %>%
 write_csv(d_final, 'fitted_rho.csv')
 ```
 
+next up - analyse + plot decay stats over chrs - doing this in
+an Rmd file (`decay_analysis.Rmd`)
 
 
 
