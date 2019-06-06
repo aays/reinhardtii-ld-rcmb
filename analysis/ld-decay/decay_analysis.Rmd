@@ -1,0 +1,198 @@
+---
+title: "LD decay analysis"
+author: Ahmed Hasan
+output: pdf_document
+---
+
+Things to calculate:
+1. Distance at which LD hits 0.5 * starting value
+2. Distance at which LD decay 'flatlines' (dx becomes 0 to x s.d.)
+3. (Plot lines)
+4. Does the distance in (2) above correlate with chromosome length?
+
+```{r}
+require(knitr)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+library(tidyverse)
+library(fs)
+```
+
+Data preparation:
+
+```{r}
+fnames <- dir_ls('data/ld-decay/finals', regexp = 'chromosome\\_[0-9]{1,2}\\_fit\\.csv')
+decay <- map_dfr(fnames, read_csv, col_types = cols())
+```
+
+## Distance at which LD = 0.5 * starting value
+
+```{r}
+get_halfdecay_point <- function(decay_df) {
+  start_point <- decay_df %>% 
+    head(n = 1) # get first row
+  start_d <- start_point$d
+  start_r2 <- start_point$r2
+  chrom <- start_point$chrom
+  
+  half_r2 <- start_r2 * 0.5
+  half_point <- decay_df %>% 
+    arrange(d) %>% 
+    filter(r2 >= half_r2) %>% 
+    tail(n = 1) # get last row at r2 == half_r2
+  
+  end_d <- half_point$d
+  end_r2 <- half_point$r2
+  
+  out <- tibble(
+    chrom = chrom,
+    start_d = start_d, end_d = end_d,
+    start_r2 = start_r2, end_r2 = end_r2
+  ) %>% 
+    mutate(diff_d = end_d - start_d,
+           diff_r2 = abs(end_r2 - start_r2))
+  
+  return(out)
+}
+```
+
+Running this over the data:
+
+```{r}
+halfdecay <- decay %>% 
+  split(.$chrom) %>% 
+  map_dfr(~ get_halfdecay_point(.))
+
+halfdecay
+```
+
+Stats:
+
+```{r}
+halfdecay %>% 
+  select(diff_d) %>% 
+  summary()
+```
+
+
+
+## Distance at which LD 'levels off'
+
+```{r}
+get_flatline_point <- function(decay_df) {
+  start_point <- decay_df %>% head(n = 1)
+  start_d <- start_point$d
+  start_r2 <- start_point$r2
+  chrom <- start_point$chrom
+  
+  flatline_point <- decay_df %>% 
+    arrange(d) %>% 
+    mutate(d2 = lead(d), r2_2 = lead(r2)) %>% 
+    mutate(
+      dx = abs(
+        round((r2_2 - r2) / (d2 - d), digits = 5)
+      )
+    ) %>% 
+    filter(dx > 0) %>% 
+    tail(n = 1)
+  
+  end_d <- flatline_point$d
+  end_r2 <- flatline_point$r2
+  
+  out <- tibble(
+    chrom = chrom,
+    start_d = start_d, end_d = end_d,
+    start_r2 = start_r2, end_r2 = end_r2
+  ) %>% 
+    mutate(diff_d = end_d - start_d,
+           diff_r2 = abs(end_r2 - start_r2))
+
+  return(out)
+}
+```
+
+Running over data:
+
+```{r}
+flatline_decay <- decay %>% 
+  split(.$chrom) %>% 
+  map_dfr(~ get_flatline_point(.))
+
+flatline_decay
+```
+
+Stats:
+
+```{r}
+flatline_decay %>% 
+  summarise(mean_r2 = mean(end_r2),
+            sd_r2 = sd(end_r2),
+            max_d = max(diff_d))
+```
+
+
+## Plot
+
+Plot prep:
+
+```{r}
+library(wesanderson)
+fig_colors <- as.character(wes_palette(17, name = 'GrandBudapest1', type = 'continuous'))
+
+fig_1_theme <- theme(
+  axis.title = element_text(family = "Helvetica", size = 16),
+  panel.grid.major = element_blank(), 
+  panel.grid.minor = element_blank(), 
+  axis.text = element_text(family = "Helvetica", size = 16, color = 'black'),
+  axis.line = element_line(colour = 'black', linetype = 'solid'),
+  axis.line.x = element_line(size = 0.9),
+  axis.line.y = element_line(size = 0.9),
+  axis.ticks = element_line(colour = 'black', linetype = 'solid', size = 0.9),
+  plot.tag = element_text(colour = 'black', size = 16, face = 'bold'),
+  panel.background = element_blank()
+)
+
+lengths <- tibble(
+  length = c(
+    1922860, 3500558, 3826814, 4091191, 4157777, 5033832, 5206065, 6421821, 
+    6576019, 7188315, 7783580, 7956127, 8033585, 9023763, 9219486, 9223677, 9730733),
+  chrom = c(
+     'chromosome_15', 'chromosome_5', 'chromosome_11', 'chromosome_4', 
+     'chromosome_14', 'chromosome_8', 'chromosome_13', 'chromosome_7', 
+     'chromosome_10', 'chromosome_17', 'chromosome_16', 'chromosome_9', 
+     'chromosome_1', 'chromosome_6', 'chromosome_3', 'chromosome_2', 'chromosome_12')
+)
+
+```
+
+Plot:
+
+```{r}
+decay %>% 
+  left_join(lengths, by = 'chrom') %>% 
+  mutate(d_kb = d / 1000) %>% 
+  ggplot(aes(x = d_kb, y = r2, color = as.factor(chrom))) +
+  fig_1_theme +
+  geom_line() +
+  coord_cartesian(x = c(0, 30)) +
+  scale_color_manual(values = fig_colors) +
+  guides(colour = FALSE) +
+  labs(x = 'Distance between SNPs (kb)', 
+       y = expression(paste('Linkage disequilibrium (r'^2, ')')))
+```
+
+## Decay and chromosome length
+
+```{r}
+flatline_decay %>% 
+  left_join(lengths, by = 'chrom') %>% 
+  ggplot(aes(x = length, y = diff_d)) +
+  geom_point() +
+  geom_smooth(method = 'lm')
+
+flatline_decay %>% 
+  left_join(lengths, by = 'chrom') %>% 
+  cor.test(~ diff_d + length, data = ., method = 'spearman')
+  
+```
+
+
