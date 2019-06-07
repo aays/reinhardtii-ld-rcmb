@@ -231,6 +231,26 @@ final <- d %>%
 [1] 0.004086864
 ```
 
+## 7/6/2019
+
+continuing landscape stats and hotspot analyses in Rmd files - 
+`landscape_analysis.Rmd` and `hotspot_analysis.Rmd`
+
+in landscape:
+- variation across chromosomes
+- chr length and chromosomal rho variation
+
+hotspot analysis:
+- how many hotspots are there?
+- how much of the genome is comprised of hotspots?
+- do all chromosomes have hotspots? which ones don't and which do?
+- summary stats:
+    - mean hotspot length
+    - mean rho fold increase over local background
+    - mean distance b/w adjacent hotspots
+    - mean rho at hotspots
+
+later on - do a correlates analysis as well (`correlates_analysis.Rmd`)
 
 
 
