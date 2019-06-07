@@ -1,0 +1,126 @@
+---
+title: "Recombination landscape analysis"
+author: Ahmed Hasan
+output: pdf_document
+---
+
+To do:
+1. What is the extent of recombination variation across chromosomes?
+2. Do shorter chromosomes have higher recombination rates?
+
+Will be using the block = 100 files for this -- block = 5 is for hotspot analysis
+
+```{r setup, include=FALSE}
+require(knitr)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+
+```{r}
+library(tidyverse)
+library(fs)
+```
+
+## Extent of rho variation across chromosomes
+
+```{r}
+non_overlapping <- function(d, windowsize) {
+  d %<>%
+    mutate(div = floor(block_start / windowsize), div2 = lead(div)) %>%
+    filter(div == div2) %>%
+    select(-contains('div'))
+  return(d)
+}
+
+fnames <- dir_ls('data/ldhelmet/block_100/', regexp = 'chromosome_[0-9]+_summarised\\.txt')
+landscape <- map(fnames, read_csv, col_types = cols()) %>% 
+  map_dfr(~ non_overlapping(., 2000))
+```
+
+Summary stats:
+
+```{r}
+landscape %>% 
+  group_by(chr) %>% 
+  summarise(mean_rho = mean(block_rate, na.rm = TRUE)) %>% 
+  arrange(mean_rho)
+```
+
+## Rho and chromosome lengths
+
+```{r}
+lengths <- tibble(
+  length = c(
+    1922860, 3500558, 3826814, 4091191, 4157777, 5033832, 5206065, 
+    6421821, 6576019, 7188315, 7783580, 7956127, 8033585, 9023763, 
+    9219486, 9223677, 9730733),
+  chr = c(
+     'chromosome_15', 'chromosome_5', 'chromosome_11', 'chromosome_4', 
+     'chromosome_14', 'chromosome_8', 'chromosome_13', 'chromosome_7', 
+     'chromosome_10', 'chromosome_17', 'chromosome_16', 'chromosome_9', 
+     'chromosome_1', 'chromosome_6', 'chromosome_3', 'chromosome_2', 'chromosome_12')
+)
+
+rho_lengths <- landscape %>% 
+  group_by(chr) %>% 
+  summarise(mean_rho = mean(block_rate, na.rm = TRUE)) %>% 
+  arrange(mean_rho) %>% 
+  left_join(lengths, by = 'chr')
+```
+
+Plot:
+
+```{r}
+rho_lengths %>% 
+  ggplot(aes(x = length, y = mean_rho)) +
+  geom_point() +
+  geom_smooth(method = 'lm')
+```
+
+Linear fit:
+
+```{r}
+rho_lengths %>% 
+  lm(mean_rho ~ length, data = .) %>% 
+  summary()
+```
+
+Comparison with decay R:
+
+```{r}
+fitted_rho <- read_csv('data/ld-decay/finals/fitted_rho.csv', col_types = cols()) %>% 
+  rename(chr = chrom) %>% 
+  select(-term)
+
+joined <- rho_lengths %>% 
+  left_join(fitted_rho, by = 'chr')
+
+joined %>% 
+  ggplot(aes(x = mean_rho, y = estimate)) +
+  geom_point() +
+  geom_smooth(method = 'lm')
+```
+
+chromosome 15's dramatically high mean rho makes it quite the outlier...
+
+
+```{r}
+# without chromosome 15?
+joined %>% 
+  filter(chr != 'chromosome_15') %>% 
+  ggplot(aes(x = mean_rho, y = estimate)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = FALSE) +
+  geom_abline(slope = 1, intercept = 0) +
+  coord_cartesian(x = c(0.002, 0.01), y = c(0.002, 0.01))
+
+```
+
+```{r}
+joined %>% 
+  filter(chr != 'chromosome_15') %>% 
+  lm(estimate ~ mean_rho, data = .) %>% 
+  summary()
+```
+
+
