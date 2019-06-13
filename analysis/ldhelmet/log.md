@@ -240,6 +240,12 @@ in landscape:
 - variation across chromosomes
 - chr length and chromosomal rho variation
 
+later on - do a correlates analysis as well (`correlates_analysis.Rmd`)
+
+## 13/6/2019
+
+today - hotspot analysis (`hotspot_analysis.Rmd`)
+
 hotspot analysis:
 - how many hotspots are there?
 - how much of the genome is comprised of hotspots?
@@ -249,10 +255,6 @@ hotspot analysis:
     - mean rho fold increase over local background
     - mean distance b/w adjacent hotspots
     - mean rho at hotspots
-
-later on - do a correlates analysis as well (`correlates_analysis.Rmd`)
-
-
 
 
 

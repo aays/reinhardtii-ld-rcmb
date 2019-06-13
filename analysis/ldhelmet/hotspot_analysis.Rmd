@@ -1,0 +1,193 @@
+---
+title: "Hotspot analysis"
+author: Ahmed Hasan
+output: pdf_document
+---
+
+To do:
+1. Do all chromosomes have hotspots? Which ones don't and which do?
+2. How many hotspots are there? (+ summary stats listed below)
+
+Summary stats:
+- mean hotspot length
+- mean rho fold increase over local background
+- amount of sequence in hotspots (ie percent value of genome)
+- mean distance b/w adjacent hotspots
+- mean rho at hotspots
+
+Will be using the block = 5 files for this (given simulation results)
+
+```{r setup, include=FALSE}
+require(knitr)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+```{r}
+library(tidyverse)
+library(fs)
+```
+
+## Data prep
+
+```{r}
+non_overlapping <- function(d, windowsize) {
+  d %<>%
+    mutate(div = floor(block_start / windowsize), div2 = lead(div)) %>%
+    filter(div == div2) %>%
+    select(-contains('div'))
+  return(d)
+}
+
+fnames <- dir_ls('data/ldhelmet/block_5/', regexp = 'chromosome_[0-9]+_summarised\\.txt')
+hotspots <- map(fnames, read_csv, col_types = cols()) %>% 
+  map_dfr(~ filter(., rate_ratio >= 5))
+
+hotspots_no_overlap <- hotspots %>% 
+  non_overlapping(2000)
+
+```
+
+
+## Do all chromosomes have hotspots?
+
+```{r}
+unique(hotspots$chr) # yep
+length(unique(hotspots$chr)) # yep
+```
+
+## Hotspot summary stats
+
+```{r}
+# time for a *shudder* for loop
+
+assign_hotspot_groups <- function(d) {
+  out <- numeric()
+  counter <- 1
+  d <- arrange(d, block_start)
+  
+  for (i in 1:(nrow(d) - 1)) {
+    current_start <- d$block_start[i]
+    next_start <- d$block_start[i + 1]
+    if (next_start <= (current_start + 2000)) {
+      out[i] <- counter
+    } else if (next_start > (current_start + 2000)) {
+      out[i] <- counter
+      counter <- counter + 1
+    }
+  }
+  
+  # final case
+  final_start <- d$block_start[nrow(d)]
+  second_to_last_start <- d$block_start[nrow(d) - 1]
+  if (final_start <= (second_to_last_start + 2000)) {
+    out[nrow(d)] <- counter
+  } else if (final_start > (second_to_last_start + 2000)) {
+    out[nrow(d)] <- counter + 1
+  }
+  
+  d_out <- d
+  d_out$hotspot_group <- out
+  return(d_out)
+}
+  
+hotspot_groups <- hotspots %>% 
+  split(.$chr) %>%
+  map(~ assign_hotspot_groups(.))
+
+```
+
+
+Summary stats:
+- hotspot counts
+- mean hotspot length
+- amount of sequence in hotspots (ie percent value of genome)
+- mean rho at hotspots + fold increase over local background
+- mean distance b/w adjacent hotspots
+
+### Hotspot counts
+
+```{r}
+hotspot_counts <- hotspot_groups %>% 
+  map_dfr(~ summarise(., n = max(hotspot_group)), .id = 'name')
+
+sum(hotspot_counts$n) # 1018
+```
+
+### Mean hotspot length
+
+```{r}
+hotspot_groups %>% 
+  map_dfr(
+    ~ group_by(., hotspot_group) %>% 
+      summarise(start = min(block_start), end = max(block_end)) %>% 
+      mutate(length = end - start),
+    .id = 'name'
+  ) %>% 
+  summarise(mean_length = mean(length)) # 3298 bp
+```
+
+### Amount of sequence in hotspots
+
+```{r}
+# total amt of sequence
+genome_length <- map(fnames, read_csv, col_types = cols()) %>% 
+  map_dfr(~ summarise(., length = max(block_end)), .id = 'chr') %>% 
+  select(length) %>% 
+  summarise(total = sum(length)) %>% 
+  unlist()
+
+genome_length
+```
+
+```{r}
+# amt of sequence just in hotspots
+hotspot_sequence <- hotspot_groups %>% 
+  map_dfr(
+    ~ group_by(., hotspot_group) %>% 
+      summarise(start = min(block_start), end = max(block_end)) %>% 
+      mutate(length = end - start),
+    .id = 'name'
+  ) %>% 
+  summarise(total = sum(length)) %>% 
+  unlist()
+
+hotspot_sequence / genome_length # 0.0307
+```
+
+### Mean rho + fold increase over local background
+
+```{r}
+hotspot_groups %>% 
+  map_dfr(
+    ~ group_by(., hotspot_group) %>% 
+      summarise(
+        mean_hotspot_rho = mean(block_rate),
+        hotspot_fold_increase = mean(rate_ratio)
+      ),
+    .id = 'chr'
+  ) %>% 
+  summarise(
+    mean_rho = mean(mean_hotspot_rho),
+    fold_increase = mean(hotspot_fold_increase)
+  )
+```
+
+### Mean distance between adjacent hotspots
+
+```{r}
+hotspot_distances <- hotspot_groups %>% 
+  map_dfr(
+    ~ group_by(., hotspot_group) %>% 
+      summarise(
+        start = min(block_start),
+        end = max(block_end)
+      ) %>% 
+      mutate(next_start = lead(start)) %>% 
+      mutate(distance = next_start - end),
+    .id = 'chr'
+  )
+
+hotspot_distances %>% 
+  summarise(mean_distance = mean(distance, na.rm = TRUE)) # 104.73 kb
+```
+
