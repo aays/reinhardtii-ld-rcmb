@@ -1,0 +1,50 @@
+---
+title: "Estimating the frequency of sex in C. reinhardtii"
+author: Ahmed Hasan
+output: pdf_document
+---
+
+## Theory
+
+Ref: Tsai et al 2008, PNAS
+
+Given that
+
+$$ \theta = 2N_{e}\mu $$
+and
+
+$$ \rho = 2N_{e}r $$
+
+If we are to take $r$ to represent $rf$, where $f$ is the frequency of sex, we can solve for $1/f$
+with existing estimates of the other parameters.
+
+## Calculation
+
+From Liu et al 2017, $r = 12 cM/Mb$
+
+$$ 12 cM/Mb = 0.12 COs/ 10^6 bp / generation = 1.2 \times 10^-7 COs/bp/generation $$
+
+
+```{r}
+rho <- 0.00409
+r <- 1.2 * 10^-7 # see above - Liu 2017
+mu <- 9.63 * 10^-10 # Ness 2015
+theta <- 2.75 * 10^-2 # Ness 2016
+```
+
+
+```{r}
+numerator <- rho / r
+denominator <- theta / mu
+
+rate <- numerator / denominator
+
+print(rate)
+print(1 / rate)
+```
+
+
+
+
+
+

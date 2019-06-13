@@ -256,7 +256,7 @@ hotspot analysis:
     - mean distance b/w adjacent hotspots
     - mean rho at hotspots
 
-
+freq of sex analysis in `frequency_analysis.Rmd`
 
 
 
