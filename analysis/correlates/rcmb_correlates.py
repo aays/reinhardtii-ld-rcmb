@@ -11,7 +11,7 @@ from collections import OrderedDict
 
 def args():
     parser = argparse.ArgumentParser(
-        description = 'use annotation table to correlate RR with annotations', 
+        description='use annotation table to correlate RR with annotations', 
         usage='python3.5 rcmb_correlates.py [options]')
 
     parser.add_argument('-t', '--table', required=True,

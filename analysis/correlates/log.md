@@ -98,3 +98,26 @@ parallel -j 16 -i sh \
 --chrom chromosome_{} --out data/correlates/chrom/chromosome_{}.txt' -- {1..14} 16 17
 ```
 
+and now to analyse these in `correlates_analysis.Rmd`
+
+other correlate-related things to do once this is done:
+
+1. hotspot enrichment by annotation
+2. RR and GC at fine and broad scales
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

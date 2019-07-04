@@ -1,0 +1,147 @@
+---
+title: "Recombination correlates analysis"
+author: Ahmed Hasan
+output: pdf_document
+---
+
+Questions:
+1. Broadly, how does intergenic (+ upstream/downstream/both) RR compare to genic (CDS/intronic/utr) RR?
+2. What does RR look like within intergenic annotations?
+3. What does RR look like within genic annotations?
+
+```{r setup, include=FALSE}
+require(knitr)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+```{r}
+library(tidyverse)
+library(fs)
+library(broom)
+```
+
+
+## Loading in data
+
+```{r}
+fnames <- dir_ls('data/correlates/chrom', regexp = 'chromosome_[0-9]{1,2}\\.txt')
+correlates <- map_dfr(fnames, read_delim, delim = ' ', col_types = cols())
+```
+
+## Genic vs intergenic RR
+
+All annotations:
+
+```{r}
+colnames(correlates)
+```
+
+Genic: is_in_CDS, is_utr5, is_utr5, is_intronic
+
+Intergenic: is_intergenic, is_upstream, is_downstream, is_both
+
+```{r}
+intergenic_only <- correlates %>% 
+  select(
+    chrom, start, end, contains('intergenic'), 
+    contains('upstream'), contains('downstream'), contains('both')
+  ) %>% 
+  gather(measure, value, -chrom, -start, -end) %>% 
+  mutate(annotation = str_replace(measure, '_(count|total)', '') %>% 
+           str_replace('is_', '')) %>% 
+  mutate(val_type = str_extract(measure, '(count|total)')) %>% 
+  select(chrom, start, end, annotation, val_type, value, -measure)
+
+
+genic_only <- correlates %>% 
+  select(
+    chrom, start, end, contains('CDS'),
+    contains('utr'), contains('intronic')
+  ) %>% 
+  gather(measure, value, -chrom, -start, -end) %>% 
+  mutate(annotation = str_replace(measure, '_(count|total)', '') %>% 
+           str_replace('is_', '')) %>% 
+  mutate(val_type = str_extract(measure, '(count|total)')) %>% 
+  select(chrom, start, end, annotation, val_type, value, -measure)
+  
+correlates_long <- intergenic_only %>% 
+  bind_rows(genic_only, .id = 'name') %>% 
+  mutate(type = case_when(
+    name == '1' ~ 'intergenic',
+    name == '2' ~ 'genic')
+  ) %>% 
+  select(-name) %>% 
+  select(type, everything())
+
+```
+
+Comparing the two:
+
+```{r}
+correlates_long %>% 
+  group_by(type, val_type) %>% 
+  summarise(s = sum(value)) %>% 
+  spread(val_type, s) %>% 
+  mutate(avg = total / count)
+```
+
+
+
+## Specific annotations
+
+```{r}
+correlates_long %>% 
+  group_by(type, annotation, val_type) %>% 
+  summarise(s = sum(value)) %>% 
+  spread(val_type, s) %>% 
+  mutate(avg = total / count)
+```
+
+code from two years ago - adapt this:
+
+```{r}
+boot_fxn <- function(df, colname, rep_count) {
+    bootobj <- replicate(rep_count, {
+    
+    obj <- df %>%
+        select(contains(paste0(colname, '_'))) %>%
+        sample_frac(size = 0.05, replace = TRUE)
+
+    obj1 <- select(obj, paste0(colname, '_total')) %>% unlist() %>% as.numeric()
+    obj2 <- select(obj, paste0(colname, '_count')) %>% unlist() %>% as.numeric()
+                                    
+    out <- sum(obj1) / sum(obj2)
+    
+    return(out)                         
+    })
+    
+    conf.df <- tidy(t.test(bootobj, alternative = 'two.sided', mu = 0, conf.level = 0.95))
+    conf.df %<>% bind_cols(data.frame(correlate = colname)) %>%
+        select(p.value, estimate, contains('conf'), correlate)
+    return(conf.df)
+}
+
+gen_correlates_cis <- data.frame()
+
+gen_correlates_cis <- gen_correlates$correlate %>%
+    map(~boot_fxn(gen, as.character(.))) %>%
+    reduce(bind_rows)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
