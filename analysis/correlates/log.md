@@ -105,6 +105,19 @@ other correlate-related things to do once this is done:
 1. hotspot enrichment by annotation
 2. RR and GC at fine and broad scales
 
+## 5/7/2019
+
+wait, why did I not use 2 kb windows here?
+
+```bash
+parallel -j 17 -i sh \
+-c 'time python3.5 analysis/correlates/rcmb_correlates.py \
+--table data/correlates/annotation_table_rho.txt.gz \
+--windowsize 2000 --gene_context 2000 \
+--chrom chromosome_{} --out data/correlates/chrom/chromosome_{}.txt' -- {1..17}
+```
+
+
 
 
 

@@ -82,33 +82,134 @@ correlates_long %>%
   group_by(type, val_type) %>% 
   summarise(s = sum(value)) %>% 
   spread(val_type, s) %>% 
-  mutate(avg = total / count)
+  mutate(avg = total / count) %>% 
+  select(type, avg) %>% 
+  spread(type, avg) %>% 
+  mutate(perc_increase = (intergenic - genic) / genic)
 ```
 
+Are they significantly different from one another?
+
+```{r}
+intergen_vs_gen <- correlates_long %>% 
+  spread(val_type, value) %>% 
+  select(-annotation) %>% 
+  group_by(type, chrom, start, end) %>% 
+  summarise(sum_total = sum(total), sum_count = sum(count)) %>% # combine sub-annotations
+  ungroup() %>% 
+  mutate(window_rho = sum_total / sum_count) %>% 
+  filter(!is.na(window_rho), !is.nan(window_rho)) %>% 
+  select(type, window_rho)
+    
+wilcox.test(window_rho ~ type, data = intergen_vs_gen)
+
+```
 
 
 ## Specific annotations
 
 ```{r}
-correlates_long %>% 
+subcorrelates <- correlates_long %>% 
   group_by(type, annotation, val_type) %>% 
   summarise(s = sum(value)) %>% 
   spread(val_type, s) %>% 
-  mutate(avg = total / count)
+  mutate(avg = total / count) %>% 
+  ungroup()
+
+subcorrelates
 ```
 
-code from two years ago - adapt this:
+How much higher is recombination within 2 kb of genes than the genome average?
+
+```{r}
+genome_avg <- 0.00409
+
+near_gene_avg <- subcorrelates %>% 
+  filter(type == 'intergenic', annotation != 'intergenic') %>% 
+  select(count, total) %>% 
+  summarise_all(sum) %>% 
+  mutate(avg = total / count) %>% 
+  select(avg) %>% unlist() %>% as.numeric()
+    
+near_gene_avg; (near_gene_avg - genome_avg) / genome_avg
+```
+
+
+## Comparisons between upstream/5' UTR and downstream/3' UTR
+
+```{r}
+# upstream/utr5
+subcorrelates %>% 
+  filter(annotation %in% c('upstream', 'utr5')) %>% 
+  select(annotation, avg) %>% 
+  spread(annotation, avg) %>% 
+  mutate(percent_increase = (upstream - utr5) / utr5)
+
+correlates_long %>% 
+  spread(val_type, value) %>% 
+  filter(annotation %in% c('upstream', 'utr5')) %>% 
+  mutate(window_rho = total / count) %>% 
+  select(annotation, window_rho) %>% 
+  wilcox.test(window_rho ~ annotation, data = .)
+
+# downstream/utr3
+subcorrelates %>% 
+  filter(annotation %in% c('downstream', 'utr3')) %>% 
+  select(annotation, avg) %>% 
+  spread(annotation, avg) %>% 
+  mutate(percent_increase = (downstream - utr3) / utr3)
+
+correlates_long %>% 
+  spread(val_type, value) %>% 
+  filter(annotation %in% c('downstream', 'utr3')) %>% 
+  mutate(window_rho = total / count) %>% 
+  select(annotation, window_rho) %>% 
+  wilcox.test(window_rho ~ annotation, data = .)
+
+
+```
+
+## Within-gene comparisons
+
+```{r}
+# CDS/intronsu
+subcorrelates %>% 
+  filter(annotation %in% c('in_CDS', 'intronic')) %>% 
+  select(annotation, avg) %>% 
+  spread(annotation, avg)
+
+correlates_long %>% 
+  spread(val_type, value) %>% 
+  filter(annotation %in% c('in_CDS', 'intronic')) %>% 
+  mutate(window_rho = total / count) %>% 
+  select(annotation, window_rho) %>% 
+  wilcox.test(window_rho ~ annotation, data = .)
+```
+
+
+## Plotting
+
+messy code from two years ago:
 
 ```{r}
 boot_fxn <- function(df, colname, rep_count) {
+  require(magrittr)
+  message('currently on ', colname)
     bootobj <- replicate(rep_count, {
     
     obj <- df %>%
         select(contains(paste0(colname, '_'))) %>%
         sample_frac(size = 0.05, replace = TRUE)
+    
+    colname_total <- paste0(colname, '_total')
+    colname_count <- paste0(colname, '_count')
+    if (!(colname_total %in% colnames(obj))) {
+      colname_total <- paste0('is_', colname_total)
+      colname_count <- paste0('is_', colname_count)
+    }
 
-    obj1 <- select(obj, paste0(colname, '_total')) %>% unlist() %>% as.numeric()
-    obj2 <- select(obj, paste0(colname, '_count')) %>% unlist() %>% as.numeric()
+    obj1 <- select(obj, colname_total) %>% unlist() %>% as.numeric()
+    obj2 <- select(obj, colname_count) %>% unlist() %>% as.numeric()
                                     
     out <- sum(obj1) / sum(obj2)
     
@@ -116,19 +217,65 @@ boot_fxn <- function(df, colname, rep_count) {
     })
     
     conf.df <- tidy(t.test(bootobj, alternative = 'two.sided', mu = 0, conf.level = 0.95))
-    conf.df %<>% bind_cols(data.frame(correlate = colname)) %>%
-        select(p.value, estimate, contains('conf'), correlate)
+    conf.df %<>% bind_cols(data.frame(annotation = colname)) %>%
+        select(p.value, estimate, contains('conf'), annotation)
     return(conf.df)
 }
 
-gen_correlates_cis <- data.frame()
+subcorrelates_cis <- data.frame()
 
-gen_correlates_cis <- gen_correlates$correlate %>%
-    map(~boot_fxn(gen, as.character(.))) %>%
-    reduce(bind_rows)
+subcorrelates_cis <- subcorrelates$annotation %>%
+    map_dfr(~boot_fxn(
+      rename(correlates, 
+             in_CDS_total = is_in_CDS_total,
+             in_CDS_count = is_in_CDS_count), 
+      as.character(.), 1000))
+
 ```
 
 
+```{r}
+fig_2_theme <- function(font_size) {
+  theme(
+    axis.title = element_text(family = 'Helvetica', size = font_size),
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_text(family = "Helvetica", size = font_size, color = 'black', angle = 45, hjust = 1),
+    axis.text.y = element_text(family = "Helvetica", size = font_size, color = 'black'),
+    panel.grid = element_blank(), panel.background = element_blank(),
+    axis.line = element_line(size = 0.7)
+  )
+}
+
+corr_cols <- c(
+  'intergenic' = 'light blue', 'upstream' = 'light blue',
+  'utr3' = 'dodger blue', 'in_CDS' = 'dodger blue', 'intronic' = 'dodger blue',
+  'utr5' = 'dodger blue', 'downstream' = 'light blue', 'both' = 'light blue')
+
+subcorrelates %>% 
+  left_join(subcorrelates_cis, by = 'annotation') %>% 
+  ggplot(aes(x = annotation, y = avg, fill = annotation)) +
+  guides(fill = FALSE) +
+  geom_bar(stat = 'identity', color = 'black', size = 0.7) +
+  geom_errorbar(
+    aes(x = annotation, ymin = conf.low, ymax = conf.high),
+    width = 0.2, color = 'black', size = 0.7
+  ) +
+  labs(
+    x = '',
+    y = expression(paste('mean ', rho, ' (1/bp)'))
+  ) +
+  scale_x_discrete(
+    labels = c('utr5' = "5' UTR", 'utr3' = "3' UTR", 'in_CDS' = 'CDS'),
+    limits = c('intergenic', 'upstream', 'utr5', 'in_CDS', 'intronic', 'utr3', 'downstream', 'both')
+  ) +
+  scale_fill_manual(values = corr_cols) +
+  fig_2_theme(12)
+
+subcorrelates %>% 
+  left_join(subcorrelates_cis, by = 'annotation') %>% 
+  write_csv('data/correlates/correlates_avg.csv')
+  
+```
 
 
 
