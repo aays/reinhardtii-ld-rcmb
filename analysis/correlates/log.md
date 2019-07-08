@@ -132,6 +132,30 @@ can modify GC content script from mt locus paper (`gc_calc.py`) for this -
 now in a new script called `gc_calc_rho.py` that parses the annotation table
 with an LD rho column
 
+first pass:
+
+```bash
+mkdir -p data/correlates/gc_content
+
+time python3.5 analysis/correlates/gc_calc_rho.py \
+--filename data/references/fasta/filtered/chromosome_5.fasta \
+--annotation data/correlates/annotation_table_rho.txt.gz \
+--windowsize 2000 \
+--chrom chromosome_5 \
+--outfile data/correlates/gc_content/chromosome_5.txt
+```
+
+looks good - now for the rest, in parallel:
+
+```bash
+parallel -j 16 -i sh -c \
+'time python3.5 analysis/correlates/gc_calc_rho.py \
+--filename data/references/fasta/filtered/chromosome_{}.fasta \
+--annotation data/correlates/annotation_table_rho.txt.gz \
+--windowsize 2000 \
+--chrom chromosome_{} \
+--outfile data/correlates/gc_content/chromosome_{}.txt' -- {1..4} {6..17}
+```
 
 
 
