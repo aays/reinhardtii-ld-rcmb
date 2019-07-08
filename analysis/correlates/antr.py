@@ -219,5 +219,26 @@ class Reader(object):
             self.reader = (line for line in self.reader)
         
         return self.reader
+
+def chlamy_lengths():
+    lengths = {'chromosome_1': 8033585,
+    'chromosome_2': 9223677,
+    'chromosome_3': 9219486,
+    'chromosome_4': 4091191,
+    'chromosome_5': 3500558,
+    'chromosome_6': 9023763,
+    'chromosome_7': 6421821,
+    'chromosome_8': 5033832,
+    'chromosome_9': 7956127,
+    'chromosome_10': 6576019,
+    'chromosome_11': 3826814,
+    'chromosome_12': 9730733,
+    'chromosome_13': 5206065,
+    'chromosome_14': 4157777,
+    'chromosome_15': 1922860,
+    'chromosome_16': 7783580,
+    'chromosome_17': 7188315}
+
+    return lengths
     
         
