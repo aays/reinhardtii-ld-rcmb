@@ -117,6 +117,21 @@ parallel -j 17 -i sh \
 --chrom chromosome_{} --out data/correlates/chrom/chromosome_{}.txt' -- {1..17}
 ```
 
+alright, annotation analysis (in `correlates_analysis.Rmd`) is now done
+
+to do:
+
+1. GC content at broad and fine scales
+2. hotspot enrichment by annotation
+
+## 8/7/2019
+
+today: GC content at broad and fine scales
+
+can modify GC content script from mt locus paper (`gc_calc.py`) for this - 
+now in a new script called `gc_calc_rho.py` that parses the annotation table
+with an LD rho column
+
 
 
 
