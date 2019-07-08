@@ -130,12 +130,12 @@ def rho_annotations(table, windowsize, gene_context, chrom, out):
         f.write(header + '\n')
 
         # iterate through chromosome
-        for i in range(len(windows) - 1):
+        for i in tqdm(range(len(windows) - 1)):
             rho = OrderedDict.fromkeys(correlates, 0.0)
             count = OrderedDict.fromkeys(correlates, 0)
             total_count = 0
 
-            for record in tqdm(p.fetch(chrom, windows[i], windows[i+1])):
+            for record in p.fetch(chrom, windows[i], windows[i+1]):
                 for key in rho.keys():
                     if key in ['upstream', 'downstream', 'both']:
                         continue
