@@ -157,6 +157,10 @@ parallel -j 16 -i sh -c \
 --outfile data/correlates/gc_content/chromosome_{}.txt' -- {1..4} {6..17}
 ```
 
+## 9/9/2019
+
+all done - will do analyses in `gc_analysis.Rmd`
+
 
 
 

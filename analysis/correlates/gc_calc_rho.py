@@ -102,12 +102,12 @@ def gc_content_calc(consensus, annotation, windowsize, chrom, outfile):
 
 
 def main():
-    filename, annotation, windowsize, region, outfile = args()
-    print('Obtaining consensus...')
+    filename, annotation, windowsize, chrom, outfile = args()
+    print('Obtaining consensus from {fname}...'.format(fname=filename))
     consensus = get_consensus(filename)
     print('Done.')
     print('Calculating GC content...')
-    gc_content_calc(consensus, annotation, windowsize, region, outfile)
+    gc_content_calc(consensus, annotation, windowsize, chrom, outfile)
     print('GC calc for {chrom} completed.'.format(chrom=chrom))
     print('Hooray!')
 
