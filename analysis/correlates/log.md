@@ -157,12 +157,36 @@ parallel -j 16 -i sh -c \
 --outfile data/correlates/gc_content/chromosome_{}.txt' -- {1..4} {6..17}
 ```
 
-## 9/9/2019
+## 9/7/2019
 
 all done - will do analyses in `gc_analysis.Rmd`
 
+## 10/7/2019
 
+today: hotspot enrichment
 
+annotation counts in and out of hotspots - test run:
+
+```bash
+mkdir -p data/correlates/hotspot_enrichment
+
+time python3.5 analysis/correlates/hotspot_annotation.py \
+--filename data/ldhelmet/block_5/chromosome_15_summarised.txt \
+--table data/correlates/annotation_table_rho.txt.gz \
+--chrom chromosome_15 \
+--out data/correlates/hotspot_enrichment/chromosome_15.txt
+```
+
+full run post-debugging:
+
+```bash
+parallel -j 17 -i sh -c \
+'time python3.5 analysis/correlates/hotspot_annotation.py \
+--filename data/ldhelmet/block_5/chromosome_{}_summarised.txt \
+--table data/correlates/annotation_table_rho.txt.gz \
+--chrom chromosome_{} \
+--out data/correlates/hotspot_enrichment/chromosome_{}.txt' -- {1..17}
+```
 
 
 
