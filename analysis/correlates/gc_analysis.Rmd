@@ -1,0 +1,188 @@
+---
+title: "GC content analysis"
+author: Ahmed Hasan
+output: pdf_document
+---
+
+Questions:
+1. How do GC and GC4 relate to RR at fine (2 kb) scales?
+2. How do GC and GC4 relate to RR at broad (1 Mb) scales?
+
+```{r setup, include=FALSE}
+require(knitr)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+```{r}
+library(tidyverse)
+library(fs)
+library(broom)
+```
+
+## Loading in data
+
+```{r}
+fnames <- dir_ls(
+  'data/correlates/gc_content/', 
+  regexp = 'chromosome_[0-9]+\\.txt')
+
+gc <- map_dfr(fnames, read_delim, delim = ' ', 
+              col_types = cols(), .id = 'fname') %>% 
+  rename(sites_4D = `4D_sites`) %>% 
+  mutate(chrom = str_extract(fname, 'chromosome_[0-9]+')) %>% 
+  select(chrom, everything(), -fname) %>% 
+  mutate(
+    GC_content = GC / total_sites,
+    GC4_content = GC4 / sites_4D,
+    rho_window = rho_total / rho_count
+  )
+
+```
+
+
+## rho ~ GC and GC4 at 2 kb scales
+
+Comparing GC and GC4:
+
+```{r}
+gc %>% 
+  select(GC_content, GC4_content) %>% 
+  gather(measure, value) %>% 
+  ggplot(aes(x = value)) +
+  geom_histogram() +
+  facet_wrap(~ measure)
+
+gc %>% 
+  select(GC_content, GC4_content) %>% 
+  gather(measure, value) %>% 
+  ggplot(aes(x = measure, y = value)) +
+  geom_boxplot()
+
+mean(gc$GC_content, na.rm = TRUE); mean(gc$GC4_content, na.rm = TRUE)
+```
+
+GC4 is higher across the board - GC4 is 81% while GC is 64%
+
+### rho ~ GC
+
+```{r}
+# plot suggests a weakly positive correlation
+gc %>% 
+  ggplot(aes(x = rho_window, y = GC_content)) +
+  geom_point(alpha = 0.2) +
+  geom_smooth(method = 'lm') +
+  scale_x_log10()
+
+cor.test(gc$rho_window, gc$GC_content, method = 'spearman')
+# Spearman's rho = 0.289, p < 2.2 x 10^-16
+```
+
+### rho ~ GC4
+
+```{r}
+# same as above, though much more spread in GC content
+gc %>% 
+  ggplot(aes(x = rho_window, y = GC4_content)) +
+  geom_point(alpha = 0.2) +
+  geom_smooth(method = 'lm') +
+  scale_x_log10()
+
+cor.test(gc$rho_window, gc$GC4_content, method = 'spearman')
+# Spearman's rho = 0.167, p < 2.2 x 10^-16
+```
+
+## rho ~ GC and GC4 at 100 kb scales
+
+```{r}
+# data prep
+
+gc_100k <- gc %>% 
+  split(.$chrom) %>% 
+  map_dfr(
+    ~ mutate(., 
+         start = floor(start / 100000) * 100000,
+         end = start + 100000) %>% 
+      select(chrom, start, everything(), -contains('content')) %>% 
+      group_by(chrom, start) %>% 
+      summarise_at(
+        vars(contains('GC'), contains('sites'), contains('rho')), sum)
+  ) %>% 
+  mutate(GC_content = GC / total_sites,
+         GC4_content = GC4 / sites_4D,
+         rho_window = rho_total / rho_count)
+
+gc_100k
+```
+
+### rho ~ GC
+
+```{r}
+gc_100k %>% 
+  ggplot(aes(x = rho_window, y = GC_content)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  scale_x_log10()
+
+cor.test(gc_100k$GC_content, gc_100k$rho_window, method = 'spearman')
+```
+
+### rho ~ GC4
+
+```{r}
+gc_100k %>% 
+  ggplot(aes(x = rho_window, y = GC4_content)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  scale_x_log10()
+
+cor.test(gc_100k$GC4_content, gc_100k$rho_window, method = 'spearman')
+```
+
+
+## rho ~ GC and GC4 at 1 Mb scales
+
+```{r}
+# data prep
+
+gc_1m <- gc %>% 
+  split(.$chrom) %>% 
+  map_dfr(
+    ~ mutate(., 
+         start = floor(start / 1e6) * 1e6,
+         end = start + 1e6) %>% 
+      select(chrom, start, everything(), -contains('content')) %>% 
+      group_by(chrom, start) %>% 
+      summarise_at(
+        vars(contains('GC'), contains('sites'), contains('rho')), sum)
+  ) %>% 
+  mutate(GC_content = GC / total_sites,
+         GC4_content = GC4 / sites_4D,
+         rho_window = rho_total / rho_count)
+
+gc_1m
+```
+
+### rho ~ GC
+
+```{r}
+gc_1m %>% 
+  ggplot(aes(x = rho_window, y = GC_content)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  scale_x_log10()
+
+cor.test(gc_1m$GC_content, gc_1m$rho_window, method = 'spearman')
+```
+
+### rho ~ GC4
+
+```{r}
+gc_1m %>% 
+  ggplot(aes(x = rho_window, y = GC4_content)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  scale_x_log10()
+
+cor.test(gc_1m$GC4_content, gc_1m$rho_window, method = 'spearman')
+```
+
