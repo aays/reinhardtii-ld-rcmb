@@ -133,6 +133,8 @@ def parse_annotations(filename, table, chrom, out):
     with open(filename, 'r') as f:
         reader = csv.DictReader(f, delimiter=',')
         for record in tqdm(reader):
+            if int(record['block_start']) % 2000 != 0: # remove overlapping windows
+                continue
             if record['rate_ratio'] == 'NA':
                 continue
             elif float(record['rate_ratio']) < 5.0:
