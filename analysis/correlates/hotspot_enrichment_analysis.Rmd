@@ -1,0 +1,116 @@
+---
+title: "Hotspot enrichment analysis"
+author: Ahmed Hasan
+output: pdf_document
+---
+
+Questions:
+1. Which annotations in the genome are enriched for hotspots?
+
+```{r setup, include=FALSE}
+require(knitr)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+```{r}
+library(tidyverse)
+library(fs)
+library(broom)
+```
+
+
+## Loading in data
+
+```{r}
+fnames <- dir_ls('data/correlates/hotspot_enrichment/', regexp = 'chromosome_[0-9]+\\.txt')
+annot <- map_dfr(fnames, read_delim, delim = ' ', col_types = cols(), .id = 'chrom') %>% 
+  mutate(chrom = str_extract(chrom, 'chromosome_[0-9]+'))
+
+annot_genome <- annot %>% 
+  select(-chrom) %>% 
+  group_by(correlate) %>% 
+  summarise_all(sum)
+
+```
+
+## Enrichment
+
+Let's start with the 'upstream' annotation. We're asking whether upstream is enriched in our hotspot regions, compared to the background.
+
+$x$ = count of upstream sites in hotspots
+
+
+| type | upstream | non-upstream |
+| ----- |-----|-----|
+| hotspot | x | total_hotspots_all - x |
+| non-hotspot | total_upstream - x | total_non_upstream - total_hotspots_all + x |
+| total | total_upstream | total_non_upstream |
+
+or
+
+| type | upstream | non-upstream |
+| ----- |-----|-----|
+| hotspot | x | total_hotspots_all - x |
+| non-hotspot | total_upstream - x | total_non_hotspot_non_upstream + x |
+| total | total_upstream | total_non_upstream |
+
+
+```{r}
+calculate_enrichment <- function(d, input_correlate) {
+  x <- d[d$correlate == input_correlate, ]$hotspot_count
+  total_correlate <- d[d$correlate == input_correlate, ]$total_count
+  total_hotspots_all <- sum(d$hotspot_count)
+  total_non_correlate <- d %>% 
+    filter(correlate != input_correlate) %>% 
+    select(total_count) %>% 
+    sum()
+  total_hotspot_non_correlate <- d %>% 
+    filter(correlate != input_correlate) %>% 
+    select(hotspot_count) %>% 
+    sum()
+  total_non_hotspot_non_correlate <- total_non_correlate - total_hotspot_non_correlate
+  
+  fisher_matrix <- matrix(
+    c(x, total_correlate - x,
+      total_hotspots_all - x, total_non_hotspot_non_correlate + x),
+    2, 2
+  )
+  
+  t <- fisher.test(fisher_matrix, alternative = 'greater')
+  return(t)
+  
+}
+
+```
+
+
+Over all correlates:
+
+
+```{r}
+
+correlates <- as.list(annot_genome$correlate)
+names(correlates) <- annot_genome$correlate
+
+correlates %>% 
+  map_dfr(~ calculate_enrichment(annot_genome, .) %>% 
+        broom::tidy(), 
+        .id = 'correlate'
+  )
+
+
+```
+
+## Percent of hotspots contained in annotations
+
+```{r}
+annot_genome %>% 
+  mutate(prop_hotspots = hotspot_count / sum(hotspot_count),
+         prop_total = total_count / sum(total_count)) %>% 
+  filter(correlate %in% c('upstream', 'downstream', 'both')) %>% 
+  summarise_at(vars(contains('prop')), sum)
+```
+
+17.5% of hotspots are in the 8.8% of sequence corresponding to these annotations.
+
+

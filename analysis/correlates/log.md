@@ -188,16 +188,5 @@ parallel -j 17 -i sh -c \
 --out data/correlates/hotspot_enrichment/chromosome_{}.txt' -- {1..17}
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
+downstream analysis is in `hotspot_enrichment_analysis.Rmd`
 
