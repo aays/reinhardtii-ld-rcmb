@@ -1,0 +1,72 @@
+---
+title: "Recombination and diversity analysis"
+author: Ahmed Hasan
+output: pdf_document
+---
+
+Questions:
+1. Does CO density from the Liu dataset correlate with our LDhelmet estimates? (ie are there more COs in high rho regions)
+2. If so, how does CO density relate to diversity?
+
+```{r setup, include=FALSE}
+require(knitr)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+```{r}
+library(tidyverse)
+library(fs)
+library(broom)
+```
+
+
+## CO density and LDhelmet rho
+
+```{r}
+rho_density <- read_csv('data/diversity/rho_to_CO_density.txt', col_types = cols()) %>% 
+  select(-X1) %>% 
+  mutate(log_CO_density = log10(CO_density)) %>% 
+  filter(is.finite(log_CO_density))
+
+ggplot(rho_density, aes(x = rho_midpoints, y = log_CO_density)) +
+  geom_point() +
+  geom_smooth(method = 'lm')
+```
+
+
+```{r}
+lm(log_CO_density ~ rho_midpoints, data = rho_density) %>% 
+  summary()
+```
+
+
+
+
+## CO density and diversity
+
+```{r}
+pi_df <- read_csv('data/diversity/pi_COs_10kb.txt', col_types = cols()) %>% 
+  select(-X1, -bins) %>% 
+  mutate(silent_sites = fold4 + intergenic + intronic) %>% 
+  filter(sites > 150000, silent_sites >= 500, COs > 0) %>% 
+  mutate(sites_mb = sites / 1000000,
+         COs_per_tetrad = COs / 12,
+         rate = COs_per_tetrad / sites_mb) %>% 
+  mutate(log_CO_density = log10(CO_density)) %>% 
+  filter(is.finite(log_CO_density))
+
+lm(Diversity ~ log10(rate), data = pi_df) %>% 
+  summary()
+```
+
+```{r}
+pi_df %>% 
+  ggplot(aes(x = log10(rate), y = Diversity)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  labs(
+    x = 'log recombination rate (cM/Mb)',
+    y = 'diversity'
+  )
+```
+

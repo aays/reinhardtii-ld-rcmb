@@ -28,4 +28,4 @@ zcat data/correlates/annotation_table_rho.txt.gz \
 ```
 
 while this and the above script run, can get cracking on porting the CO density ~ diversity
-analysis since it doesn't involve the rho data
+analysis (since it doesn't involve the rho data) over in `diversity_analysis.Rmd`
