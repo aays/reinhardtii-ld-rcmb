@@ -172,7 +172,7 @@ correlates_long %>%
 ## Within-gene comparisons
 
 ```{r}
-# CDS/intronsu
+# CDS/introns
 subcorrelates %>% 
   filter(annotation %in% c('in_CDS', 'intronic')) %>% 
   select(annotation, avg) %>% 

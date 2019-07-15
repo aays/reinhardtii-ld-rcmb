@@ -26,7 +26,11 @@ library(broom)
 rho_density <- read_csv('data/diversity/rho_to_CO_density.txt', col_types = cols()) %>% 
   select(-X1) %>% 
   mutate(log_CO_density = log10(CO_density)) %>% 
-  filter(is.finite(log_CO_density))
+  filter(is.finite(log_CO_density)) %>% 
+  mutate(sites_mb = sites / 1000000,
+         COs_per_tetrad = COs / 48,
+         cM = COs_per_tetrad * 100,
+         rate = cM / sites_mb)
 
 ggplot(rho_density, aes(x = rho_midpoints, y = log_CO_density)) +
   geom_point() +
@@ -35,11 +39,9 @@ ggplot(rho_density, aes(x = rho_midpoints, y = log_CO_density)) +
 
 
 ```{r}
-lm(log_CO_density ~ rho_midpoints, data = rho_density) %>% 
+lm(log10(rate) ~ rho_midpoints, data = rho_density) %>% 
   summary()
 ```
-
-
 
 
 ## CO density and diversity
@@ -48,10 +50,11 @@ lm(log_CO_density ~ rho_midpoints, data = rho_density) %>%
 pi_df <- read_csv('data/diversity/pi_COs_10kb.txt', col_types = cols()) %>% 
   select(-X1, -bins) %>% 
   mutate(silent_sites = fold4 + intergenic + intronic) %>% 
-  filter(sites > 150000, silent_sites >= 500, COs > 0) %>% 
+  filter(sites > 200000, silent_sites >= 500, COs > 0) %>% 
   mutate(sites_mb = sites / 1000000,
-         COs_per_tetrad = COs / 12,
-         rate = COs_per_tetrad / sites_mb) %>% 
+         COs_per_tetrad = COs / 48,
+         cM = COs_per_tetrad * 100,
+         rate = cM / sites_mb) %>% 
   mutate(log_CO_density = log10(CO_density)) %>% 
   filter(is.finite(log_CO_density))
 

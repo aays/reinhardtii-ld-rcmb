@@ -1,0 +1,308 @@
+---
+title: "LD recombination paper plots"
+author: Ahmed Hasan
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(fs)
+library(wesanderson)
+library(patchwork)
+```
+
+## Figure 1 - Distribution of rho and LD decay
+
+Create theme:
+
+```{r}
+ld_paper_theme <- function(font_size = 16) {
+  theme(
+    axis.title = element_text(family = 'Helvetica', size = font_size),
+    axis.text = element_text(family = 'Helvetica', size = font_size, color = 'black'),
+    axis.line = element_line(color = 'black', linetype = 'solid', size = 0.9),
+    axis.ticks = element_line(color = 'black', linetype = 'solid', size = 0.9),
+    plot.tag = element_text(color = 'black', size = font_size, face = 'bold'),
+    panel.grid = element_blank(),
+    panel.background = element_blank()
+  )
+}
+
+fig_1_cols <- as.character(
+  wes_palette(17, name = 'GrandBudapest1', type = 'continuous')
+)
+
+```
+
+
+### 1A - CDF of rho values across the genome
+
+Load in data:
+
+```{r}
+lengths <- read_delim(
+  'data/lengths.csv', delim = ' ',
+  col_names = c('chr', 'length'), col_types = cols())
+
+dist_2k <- map_dfr(
+  dir_ls('data/ldhelmet/block_100/', regexp = 'chromosome_[0-9]+_summarised\\.txt'),
+  read_csv, col_types = cols()
+) %>% 
+  mutate(div = floor(block_start / 2000), div2 = lead(div)) %>% 
+  filter(div == div2) %>% 
+  select(-contains('div')) %>% 
+  left_join(lengths, by = 'chr')
+```
+
+Plot:
+
+```{r}
+fig_1a <- dist_2k %>% 
+  ggplot(aes(x = block_rate)) +
+  stat_ecdf(aes(color = factor(length))) +
+  geom_vline(
+    aes(xintercept = mean(dist_2k$block_rate, na.rm = TRUE)),
+    linetype = 'dashed', col = 'black', size = 0.9
+  ) +
+  guides(colour = FALSE) +
+  scale_color_manual(values = fig_1_cols) +
+  coord_cartesian(x = c(0, 0.06)) +
+  labs(
+    x = expression(paste(rho, ' (1/bp)')),
+    y = 'proportion',
+    tag = 'A'
+  ) +
+  ld_paper_theme(16)
+
+fig_1a
+```
+
+### 1B - LD decay across chromosomes
+
+Load in data:
+
+```{r}
+plink_lines <- map_dfr(
+  dir_ls('data/ld-decay/finals/', regexp = 'chromosome_[0-9]+_fit\\.csv'),
+  read_csv, col_types = cols()
+) %>% 
+  rename(chr = chrom) %>% 
+  left_join(lengths, by = 'chr')
+```
+
+Plot:
+
+```{r}
+fig_1b <- plink_lines %>% 
+  mutate(d_kb = d / 1000) %>% 
+  ggplot(aes(x = d_kb, y = r2, color = factor(length))) +
+  geom_line(size = 0.5) +
+  scale_color_manual(values = fig_1_cols) +
+  guides(color = FALSE) +
+  labs(
+    x = 'Distance between SNPs (kb)',
+    y = expression(paste('Linkage disequilibrium (r'^2, ')')),
+    tag = 'B'
+  ) +
+  coord_cartesian(
+    x = c(0, 20),
+    y = c(0, 0.5)
+  ) +
+  ld_paper_theme(16)
+
+fig_1b
+```
+
+### Fig 1 legend
+
+
+```{r}
+dummy <- data.frame(
+  x = c(1:17), y = c(1:17), p = c(1:17)
+)
+
+legend_theme <- function(font_size) {
+  theme(
+    legend.title = element_text(family = 'Helvetica', size = font_size),
+    legend.text = element_text(family = 'Helvetica', size = font_size),
+    legend.key.height = unit(0.8, 'cm'),
+    legend.key.width = unit(0.8, 'cm')
+  )
+}
+
+fig_1_legend_plot <- ggplot(dummy, aes(x, y, color = p)) +
+  geom_point() +
+  scale_color_continuous(
+    low = fig_1_cols[1], high = fig_1_cols[10], guide = 'colourbar', 
+    limits = c(1, 9), breaks = c(seq(2, 9, by = 2))
+  ) +
+  guides(
+    colour = guide_colorbar(title = 'Chromosome\nLength (Mb)'), 
+    ticks = FALSE) +
+  legend_theme(font_size = 14)
+
+fig_1_legend <- cowplot::get_legend(fig_1_legend_plot)
+```
+
+
+### Putting it all together
+
+```{r}
+fig_1 <- fig_1a + fig_1b + fig_1_legend +
+  plot_layout(ncol = 3, nrow = 1, width = c(1.1, 1.1, 0.4))
+
+fig_1
+```
+
+
+## Figure 2 - Correlates plot
+
+Create theme:
+
+```{r}
+fig_2_theme <- function(font_size) {
+  theme(
+    axis.title = element_text(family = 'Helvetica', colour = 'black', size = font_size),
+    axis.line = element_line(colour = 'black', linetype = 'solid', size = 0.7),
+    axis.ticks.x = element_blank(),
+    axis.ticks.y = element_line(size = 1),
+    axis.text.x = element_text(family = 'Helvetica', size = font_size,
+                               colour = 'black', angle = 45, hjust = 1),
+    axis.text.y = element_text(family = 'Helvetica', colour = 'black', size = font_size),
+    panel.grid = element_blank(), panel.background = element_blank()
+  )
+}
+
+corr_cols <- c(
+  'intergenic' = 'light blue', 'upstream' = 'light blue', 'utr3' = 'dodger blue', 
+  'in_CDS' = 'dodger blue', 'intronic' = 'dodger blue', 'utr5' = 'dodger blue', 
+  'downstream' = 'light blue', 'both' = 'light blue'
+)
+```
+
+Load in data:
+
+```{r}
+correlates <- read_csv('data/correlates/correlates_avg.csv', col_types = cols())
+```
+
+Plot:
+
+```{r}
+fig_2 <- correlates %>% 
+  ggplot(aes(x = annotation, y = avg, fill = annotation)) +
+  geom_bar(stat = 'identity', color = 'black', size = 0.7) +
+  geom_errorbar(
+    aes(ymin = conf.low, ymax = conf.high),
+    width = 0.2, colour = 'black', size = 0.7) +
+  geom_hline(
+    aes(yintercept = mean(dist_2k$block_rate, na.rm = TRUE)),
+    linetype = 'dashed', size = 1) +
+  labs(
+    x = '',
+    y = expression(paste('mean ', rho, ' (1/bp)'))
+  ) +
+  scale_fill_manual(values = corr_cols) +
+  scale_x_discrete(
+    labels = c('utr3' = "3' UTR", 'utr5' = "5' UTR", 'in_CDS' = 'CDS'),
+    limits = c('intergenic', 'upstream', 'utr5', 'in_CDS', 'intronic', 'utr3', 'downstream', 'both')
+  ) +
+  guides(fill = FALSE) +
+  fig_2_theme(16)
+  
+fig_2
+```
+
+## Figure 3 - Recombination and nucleotide diversity
+
+### 3A - rho and CO density
+
+Load in data:
+
+```{r}
+rho_density <- read_csv('data/diversity/rho_to_CO_density.txt', col_types = cols()) %>% 
+  select(-X1) %>% 
+  mutate(log_CO_density = log10(CO_density)) %>% 
+  filter(is.finite(log_CO_density)) %>% 
+  mutate(sites_mb = sites / 1000000,
+         COs_per_tetrad = COs / 48,
+         cM = COs_per_tetrad * 100,
+         rate = cM / sites_mb)
+
+pi_density <- read_csv('data/diversity/pi_COs_10kb.txt', col_types = cols()) %>% 
+  select(-X1, -bins) %>% 
+  mutate(silent_sites = fold4 + intergenic + intronic) %>% 
+  filter(sites > 200000, silent_sites >= 500, COs > 0) %>% 
+  mutate(sites_mb = sites / 1000000,
+         COs_per_tetrad = COs / 48,
+         cM = COs_per_tetrad * 100,
+         rate = cM / sites_mb) %>% 
+  mutate(log_CO_density = log10(CO_density)) %>% 
+  filter(is.finite(log_CO_density))
+```
+
+Plot:
+
+```{r}
+fig_3a <- rho_density %>% 
+  ggplot(aes(x = rho_midpoints, y = log10(rate))) +
+  geom_point(size = 1.5) +
+  geom_smooth(method = 'lm', se = FALSE) +
+  labs(
+    x = expression(rho),
+    y = 'Crossover rate (cM/Mb)',
+    tag = 'A'
+  ) +
+  coord_cartesian(
+    x = c(0, 0.06),
+    y = c(0.5, 3.2)
+  ) +
+  scale_y_continuous(
+    breaks = c(1, 2, 3),
+    labels = c(
+      expression(10), expression(10^2), expression(10^3)
+    )
+  ) +
+  ld_paper_theme(16) +
+  annotate('text', x = 0.007, y = 2.75, size = 5.5,
+           label = 'italic(R) ^ 2 == "0.484***"', parse = TRUE)
+
+fig_3a
+```
+
+
+```{r}
+fig_3b <- pi_density %>% 
+  ggplot(aes(x = log10(rate), y = Diversity)) +
+  geom_point(size = 1.5) +
+  geom_smooth(method = 'lm', se = FALSE) +
+  labs(
+    x = 'Crossover rate (cM/Mb)',
+    y = expression(paste('Nucleotide diversity (', theta[pi], ')')),
+    tag = 'B'
+  ) +
+  coord_cartesian(
+    x = c(1.3, 2.6),
+    y = c(0, 0.05)
+  ) +
+  ld_paper_theme(16) +
+  scale_x_continuous(
+    breaks = c(1.5, 2, 2.5),
+    labels = c(expression(10^1.5), expression(10^2), expression(10^2.5))
+  ) +
+  annotate('text', x = 1.45, y = 0.04, size = 5.5,
+           label = 'italic(R) ^ 2 == "0.313***"', parse = TRUE)
+
+fig_3b
+```
+
+### Putting it all together
+
+```{r}
+fig_3 <- fig_3a + fig_3b
+
+fig_3
+```
+
+
+
