@@ -304,5 +304,53 @@ fig_3 <- fig_3a + fig_3b
 fig_3
 ```
 
+## Fig. S3 - Rho and chromosome length
+
+Data has been read in already (see Fig. 1)
+
+```{r}
+rho_lengths <- dist_2k %>% 
+  group_by(chr, length) %>% 
+  summarise(mean_rho = mean(block_rate, na.rm = TRUE)) 
+
+lm(mean_rho ~ length, data = rho_lengths) %>% 
+  summary()
+
+```
+
+
+```{r}
+fig_s3 <- rho_lengths %>% 
+  mutate(length_mb = length / 1e6) %>% 
+  ggplot(aes(x = length_mb, y = mean_rho)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = FALSE) +
+  labs(
+    x = 'Chromosome length (Mb)',
+    y = expression(paste('Mean ', rho))
+  ) +
+  ld_paper_theme(16) +
+  annotate('text', x = 8.45, y = 0.009, size = 5.5,
+           label = 'italic(R) ^ 2 == "0.365*"', parse = TRUE)
+
+fig_s3
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
