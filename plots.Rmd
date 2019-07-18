@@ -9,6 +9,9 @@ library(tidyverse)
 library(fs)
 library(wesanderson)
 library(patchwork)
+
+din1 <- 6.34375
+din2 <- 3.385417
 ```
 
 ## Figure 1 - Distribution of rho and LD decay
@@ -139,7 +142,7 @@ fig_1_legend_plot <- ggplot(dummy, aes(x, y, color = p)) +
   guides(
     colour = guide_colorbar(title = 'Chromosome\nLength (Mb)'), 
     ticks = FALSE) +
-  legend_theme(font_size = 14)
+  legend_theme(font_size = 16)
 
 fig_1_legend <- cowplot::get_legend(fig_1_legend_plot)
 ```
@@ -152,6 +155,8 @@ fig_1 <- fig_1a + fig_1b + fig_1_legend +
   plot_layout(ncol = 3, nrow = 1, width = c(1.1, 1.1, 0.4))
 
 fig_1
+
+# ggsave('plots/fig_1.pdf', plot = fig_1, width = din1 * 1.5, height = din1 * 0.7)
 ```
 
 
@@ -207,10 +212,16 @@ fig_2 <- correlates %>%
     labels = c('utr3' = "3' UTR", 'utr5' = "5' UTR", 'in_CDS' = 'CDS'),
     limits = c('intergenic', 'upstream', 'utr5', 'in_CDS', 'intronic', 'utr3', 'downstream', 'both')
   ) +
+  scale_y_continuous(
+    breaks = seq(0, 0.006, 0.001),
+    labels = seq(0, 0.006, 0.001)
+  ) +
   guides(fill = FALSE) +
   fig_2_theme(16)
   
 fig_2
+
+# ggsave('plots/fig_2.pdf', plot = fig_2, width = din1, height = din1)
 ```
 
 ## Figure 3 - Recombination and nucleotide diversity
@@ -264,7 +275,7 @@ fig_3a <- rho_density %>%
     )
   ) +
   ld_paper_theme(16) +
-  annotate('text', x = 0.007, y = 2.75, size = 5.5,
+  annotate('text', x = 0.011, y = 2.9, size = 5.5,
            label = 'italic(R) ^ 2 == "0.484***"', parse = TRUE)
 
 fig_3a
@@ -290,7 +301,7 @@ fig_3b <- pi_density %>%
     breaks = c(1.5, 2, 2.5),
     labels = c(expression(10^1.5), expression(10^2), expression(10^2.5))
   ) +
-  annotate('text', x = 1.45, y = 0.04, size = 5.5,
+  annotate('text', x = 1.55, y = 0.045, size = 5.5,
            label = 'italic(R) ^ 2 == "0.313***"', parse = TRUE)
 
 fig_3b
@@ -302,6 +313,8 @@ fig_3b
 fig_3 <- fig_3a + fig_3b
 
 fig_3
+
+# ggsave('plots/fig_3.pdf', plot = fig_3, width = din1 * 1.5, height = din1 * 0.7)
 ```
 
 ## Fig. S3 - Rho and chromosome length
@@ -323,7 +336,7 @@ lm(mean_rho ~ length, data = rho_lengths) %>%
 fig_s3 <- rho_lengths %>% 
   mutate(length_mb = length / 1e6) %>% 
   ggplot(aes(x = length_mb, y = mean_rho)) +
-  geom_point() +
+  geom_point(size = 1.4) +
   geom_smooth(method = 'lm', se = FALSE) +
   labs(
     x = 'Chromosome length (Mb)',
@@ -334,6 +347,8 @@ fig_s3 <- rho_lengths %>%
            label = 'italic(R) ^ 2 == "0.365*"', parse = TRUE)
 
 fig_s3
+
+# ggsave('plots/fig_s3.pdf', plot = fig_s3, width = din1 * 0.75, height = din1 * 0.75)
 ```
 
 
