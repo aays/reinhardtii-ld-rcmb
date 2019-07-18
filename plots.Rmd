@@ -275,7 +275,7 @@ fig_3a <- rho_density %>%
     )
   ) +
   ld_paper_theme(16) +
-  annotate('text', x = 0.011, y = 2.9, size = 5.5,
+  annotate('text', x = 0.014, y = 3.2, size = 5.5,
            label = 'italic(R) ^ 2 == "0.484***"', parse = TRUE)
 
 fig_3a
@@ -301,7 +301,7 @@ fig_3b <- pi_density %>%
     breaks = c(1.5, 2, 2.5),
     labels = c(expression(10^1.5), expression(10^2), expression(10^2.5))
   ) +
-  annotate('text', x = 1.55, y = 0.045, size = 5.5,
+  annotate('text', x = 1.6, y = 0.05, size = 5.5,
            label = 'italic(R) ^ 2 == "0.313***"', parse = TRUE)
 
 fig_3b
@@ -314,7 +314,7 @@ fig_3 <- fig_3a + fig_3b
 
 fig_3
 
-# ggsave('plots/fig_3.pdf', plot = fig_3, width = din1 * 1.5, height = din1 * 0.7)
+# ggsave('plots/fig_3.pdf', plot = fig_3, width = din1 * 1.25, height = din1 * 0.6)
 ```
 
 ## Fig. S3 - Rho and chromosome length
