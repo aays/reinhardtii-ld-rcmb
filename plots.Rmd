@@ -213,6 +213,7 @@ fig_2 <- correlates %>%
     limits = c('intergenic', 'upstream', 'utr5', 'in_CDS', 'intronic', 'utr3', 'downstream', 'both')
   ) +
   scale_y_continuous(
+    expand = c(0, 0),
     breaks = seq(0, 0.006, 0.001),
     labels = seq(0, 0.006, 0.001)
   ) +
