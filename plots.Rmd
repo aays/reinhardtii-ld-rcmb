@@ -237,7 +237,7 @@ rho_density <- read_csv('data/diversity/rho_to_CO_density.txt', col_types = cols
   mutate(log_CO_density = log10(CO_density)) %>% 
   filter(is.finite(log_CO_density)) %>% 
   mutate(sites_mb = sites / 1000000,
-         COs_per_tetrad = COs / 48,
+         COs_per_tetrad = COs / 108,
          cM = COs_per_tetrad * 100,
          rate = cM / sites_mb)
 
@@ -246,7 +246,7 @@ pi_density <- read_csv('data/diversity/pi_COs_10kb.txt', col_types = cols()) %>%
   mutate(silent_sites = fold4 + intergenic + intronic) %>% 
   filter(sites > 200000, silent_sites >= 500, COs > 0) %>% 
   mutate(sites_mb = sites / 1000000,
-         COs_per_tetrad = COs / 48,
+         COs_per_tetrad = COs / 108,
          cM = COs_per_tetrad * 100,
          rate = cM / sites_mb) %>% 
   mutate(log_CO_density = log10(CO_density)) %>% 
@@ -294,15 +294,15 @@ fig_3b <- pi_density %>%
     tag = 'B'
   ) +
   coord_cartesian(
-    x = c(1.3, 2.6),
+    x = c(0.8, 2.3),
     y = c(0, 0.05)
   ) +
   ld_paper_theme(16) +
   scale_x_continuous(
-    breaks = c(1.5, 2, 2.5),
-    labels = c(expression(10^1.5), expression(10^2), expression(10^2.5))
+    breaks = c(1, 1.5, 2),
+    labels = c(expression(10^1), expression(10^1.5), expression(10^2))
   ) +
-  annotate('text', x = 1.6, y = 0.05, size = 5.5,
+  annotate('text', x = 1.15, y = 0.05, size = 5.5,
            label = 'italic(R) ^ 2 == "0.313***"', parse = TRUE)
 
 fig_3b
