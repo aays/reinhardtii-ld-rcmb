@@ -46,6 +46,18 @@ landscape %>%
   arrange(mean_rho)
 ```
 
+Range of rho for 95% of windows:
+
+```{r}
+landscape %>% 
+  select(block_rate) %>% 
+  arrange(block_rate) %>% 
+  mutate(perc = percent_rank(block_rate)) %>% 
+  filter(perc >= 0.025, perc <= 0.975) %>% 
+  summarise(min(block_rate), max(block_rate))
+```
+
+
 ## Rho and chromosome lengths
 
 ```{r}
