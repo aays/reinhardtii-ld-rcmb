@@ -1,0 +1,189 @@
+---
+title: "Intergenic tract analysis"
+author: Ahmed Hasan
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(fs)
+library(here)
+
+
+din1 <- 6.34375
+din2 <- 3.385417
+```
+
+## Load data
+
+```{r}
+d <- here('data/correlates/intergenic_tract_rho.tsv') %>% 
+  read_tsv(col_types = cols()) %>% 
+  filter(tract_size > 0)
+```
+
+Schematic:
+- less than 2 kb ('short')
+  - both = L
+- 2 kb - 4 kb ('medium')
+  - D = L - 2
+  - upstream = downstream = D
+  - both = L - 2D
+- greater than 4 kb ('long')
+  - upstream = downstream = 2 kb
+  - intergenic = L - 4
+  - both = 0
+  
+  
+```{r}
+d_bins <- d %>% 
+  mutate(
+    bin = case_when(
+      tract_size <= 2000 ~ 'short',
+      tract_size > 2000 & tract_size <= 4000 ~ 'medium',
+      tract_size > 4000 ~ 'long'
+    )
+  ) %>% 
+  mutate(
+    both_sites = case_when(
+      bin == 'short' ~ tract_size,
+      bin == 'medium' ~ tract_size - (2 * (tract_size - 2000)),
+      bin == 'long' ~ 0
+    ),
+    upstream_sites = case_when(
+      bin == 'short' ~ 0,
+      bin == 'medium' ~ tract_size - 2000,
+      bin == 'long' ~ 2000
+    ),
+    intergenic_sites = case_when(
+      bin == 'short' ~ 0,
+      bin == 'medium' ~ 0,
+      bin == 'long' ~ tract_size - 4000
+    )
+  ) %>% 
+  mutate(downstream_sites = upstream_sites)
+```
+
+## Distributions
+
+Overall tract sizes:
+
+```{r}
+ggplot(d_bins, aes(x = log10(tract_size))) +
+  geom_histogram() +
+  theme_bw()
+```
+
+
+Tract sizes by annotation:
+
+```{r}
+d_bins %>% 
+  select(ends_with('sites')) %>% 
+  summary()
+```
+
+Looks how we'd expect, with both/upstream/downstream capped at 2000 and intergenic being much larger
+
+Tract counts by bin:
+
+```{r}
+d_bins %>% 
+  group_by(bin) %>% 
+  tally() %>% 
+  mutate(prop = n / sum(n))
+```
+
+Short tracts make up *90.9 percent* of all intergenic tracts! 
+
+Rho distributions by tract size:
+
+```{r}
+d_bins %>% 
+  ggplot(aes(x = bin, y = log10(rho_window))) +
+  geom_boxplot() +
+  geom_jitter(alpha = 0.2)
+```
+
+```{r}
+d_bins %>% 
+  group_by(bin) %>% 
+  summarise(
+    total_rho = sum(rho_vals),
+    total_count = sum(rho_count),
+    sd_rho = sd(rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  )
+```
+
+Visualizing this:
+
+```{r}
+d_summarised <- d_bins %>% 
+  group_by(bin) %>% 
+  summarise(
+    total_rho = sum(rho_vals),
+    total_count = sum(rho_count),
+    sd_rho = sd(rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  ) %>% 
+  mutate(prop = n / sum(n)) %>% 
+  select(bin, prop, n, mean_rho, se_rho)
+
+d_summarised %>% 
+  ggplot(aes(x = bin, y = mean_rho)) +
+  geom_bar(stat = 'identity') +
+  geom_errorbar(
+    aes(ymax = mean_rho + se_rho, ymin = mean_rho - se_rho),
+    size = 0.4, width = 0.3
+  ) +
+  theme_classic()
+
+d_summarised %>% 
+  ggplot(aes(x = bin, y = n)) +
+  geom_bar(stat = 'identity') +
+  theme_classic()
+```
+
+The overall trend looks pretty messy though:
+
+```{r}
+ggplot(d_bins, aes(x = log10(tract_size), y = log10(rho_window))) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = 'lm')
+
+```
+
+Next up - how does RR vary in UTRs by the sizes of adjacent intergenic tracts?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
