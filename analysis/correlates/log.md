@@ -190,3 +190,126 @@ parallel -j 17 -i sh -c \
 
 downstream analysis is in `hotspot_enrichment_analysis.Rmd`
 
+## 6/8/2019
+
+what is the distribution of intergenic tract lengths? how does recombination rate
+vary by tract length? (and does it explain the 'both' pattern)
+
+getting genes only:
+
+```bash
+grep 'gene' data/references/final.strict.GFF3 | cut -f 1,4,5 > data/references/genes.bed
+```
+
+getting intergenic regions w/ python:
+
+```python
+>>> from tqdm import tqdm
+>>> import csv
+>>> fname = 'data/references/genes.bed'
+>>> outname = 'data/references/intergenic.bed'
+>>> with open(fname, 'r') as f:
+  2     lines = [line for line in csv.reader(f, delimiter='\t')]
+>>> with open(outname, 'w', newline='') as f:
+  2     f.write('\t'.join(['chrom', 'start', 'end', 'next_start', 'next_end', 'intergen_start', 'intergen_end', 'dist'
+    ]))
+  3     f.write('\n')
+  4     w = csv.writer(f, delimiter='\t')
+  5     for i in tqdm(range(len(lines) - 1)):
+  6         chrom, start, end = lines[i]
+  7         start, end = int(start), int(end)
+  8         next_chrom, next_start, next_end = lines[i + 1]
+  9         next_start, next_end = int(next_start), int(next_end)
+ 10         if start == next_start: # two of same record
+ 11             continue
+ 12         if chrom == next_chrom:
+ 13             dist = next_start - end - 1
+ 14             out_start = end + 1
+ 15             out_end = next_start - 1
+ 16             w.writerow([chrom, start, end, next_start, next_end, out_start, out_end, dist])
+ 17         else:
+ 18             continue
+100%|███████████████████████████████████████████████████████████████████████| 21853/21853 [00:00<00:00, 190694.61it/s]
+```
+
+getting rho values and counts for each of these:
+
+```python
+>>> with open(outname, 'w', newline='') as f_out:
+  2     with open(fname, 'r', newline='') as f:
+  3         lines = [line for line in csv.DictReader(f, delimiter='\t')]
+  4         fieldnames = list(lines[0].keys())
+  5         fieldnames.extend(['rho_vals', 'rho_count', 'rho_window'])
+  6         w = csv.DictWriter(f_out, fieldnames=fieldnames, delimiter='\t')
+  7         for line in tqdm(lines):
+  8             p = antr.Reader(table)
+  9             rho_vals, rho_count = 0.0, 0
+ 10             for record in p.fetch(line['chrom'], int(line['intergen_start']), int(line['intergen_end'])):
+ 11                 if not record.ld_rho == 'NA':
+ 12                     rho_vals += record.ld_rho
+ 13                     rho_count += 1
+ 14             out_dict = line
+ 15             out_dict['rho_vals'] = rho_vals
+ 16             out_dict['rho_count'] = rho_count
+ 17             try:
+ 18                 out_dict['rho_window'] = rho_vals / rho_count
+ 19             except ZeroDivisionError:
+ 20                 out_dict['rho_window'] = 0.0
+ 21             w.writerow(out_dict)
+```
+
+nvm - need to account for overlapping records in the GFF
+
+trying a script:
+
+```bash
+time python3.5 analysis/correlates/make_intergenic_bed.py \
+--fname data/references/genes.bed \
+--out data/references/intergenic.bed
+```
+
+that didn't work either - let's use the annotation table instead:
+
+```bash
+time python3.5 analysis/correlates/intergenic_tract_lengths.py \
+--table data/correlates/annotation_table_rho.txt.gz \
+--out data/correlates/intergenic_tract_rho.tsv
+```
+
+## 7/8/2019
+
+script above took 1.5 hrs - but there was a bug in the script not accounting
+for tracts 'spanning chromosomes' (ie when parser hits end of chrom)
+
+
+## 9/8/2019
+
+schematic:
+let L = size of intergenic tract
+- if L < 2 kb:
+    - both = L
+- if 2 kb < L < 4 kb:
+    - D = L - 2 kb (ie size over 2)
+        - eg 2.2 kb
+    - upstream = downstream = D
+        - e.g. 0.2 kb, since 0-0.2 is downstream of gene_left but >2 kb out from gene_right, and 2.0-2.2 is upstream of gene_right but >2kb out from gene_left
+    - both = L - 2D
+        - eg 0-0.2 downstream (gene_left), 2-2.2 upstream (gene_right), both = 1.8 kb
+    - intergenic = 0
+- if L > 4 kb
+    - upstream = downstream = 2 kb
+    - intergenic = L - 4 kb
+        - ie remainder of tract that is not upstream/downstream of list
+    - both = 0
+
+how does rho_window vary by tract bin?
+
+
+
+
+
+
+
+
+
+
