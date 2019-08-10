@@ -302,7 +302,20 @@ let L = size of intergenic tract
         - ie remainder of tract that is not upstream/downstream of list
     - both = 0
 
-how does rho_window vary by tract bin?
+## 10/8/2019
+
+how does RR vary in UTRs by the sizes of adjacent intergenic tracts?
+
+writing a new script that takes in the output of `intergenic_tract_analysis.py` 
+and appends rho values for adjacent UTRs
+
+
+
+
+
+
+
+
 
 
 
