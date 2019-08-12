@@ -309,8 +309,38 @@ how does RR vary in UTRs by the sizes of adjacent intergenic tracts?
 writing a new script that takes in the output of `intergenic_tract_analysis.py` 
 and appends rho values for adjacent UTRs
 
+## 11/8/2019
 
+script is done:
 
+```bash
+time python3.5 analysis/correlates/utr_rho.py \
+--fname data/correlates/intergenic_tract_rho.tsv \
+--table data/correlates/annotation_table_rho.txt.gz \
+--outname data/correlates/utr_tract_rho.tsv
+```
+
+looks good - there do seem to be some odd genes that don't have UTRs at the
+starts in the GFF - looking at them manually just now it seems they just
+don't have UTRs listed
+
+```
+2573it [01:24, 28.02it/s]wtf
+chromosome_2 8000026
+4662it [02:34, 28.30it/s]wtf
+chromosome_4 2783437
+6104it [03:22, 30.30it/s]wtf
+chromosome_6 4293777
+6701it [03:42, 28.48it/s]wtf
+chromosome_6 8000002
+8651it [04:47, 29.00it/s]wtf
+chromosome_8 5000003
+14619it [08:08, 39.42it/s]wtf
+chromosome_15 1945
+17279it [09:42, 29.64it/s]
+```
+
+most UTRs were parsed correctly though - let's have a look at the rho values
 
 
 
