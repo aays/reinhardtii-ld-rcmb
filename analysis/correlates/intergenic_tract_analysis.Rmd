@@ -164,26 +164,39 @@ ggplot(d_bins, aes(x = log10(tract_size), y = log10(rho_window))) +
 
 ```
 
-Next up - how does RR vary in UTRs by the sizes of adjacent intergenic tracts?
+## Rho in UTRs
 
+```{r}
+utr <- here('data/correlates/utr_tract_rho.tsv') %>% 
+  read_tsv(col_types = cols()) %>% 
+  filter(tract_size > 0)
 
+utr_full <- left_join(
+  utr, d_bins, 
+  by = c('chrom', 'start', 'end', 'tract_size', 'rho_vals', 'rho_count', 'rho_window'))
+```
 
+How does rho vary in UTRs by bin?
 
+```{r}
+utr_full %>% 
+  group_by(bin) %>% 
+  summarise(
+    total_rho = sum(utr_rho_vals),
+    total_count = sum(utr_rho_count),
+    sd_rho = sd(utr_rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  )
+```
 
+In the 'long' bin (ie no instances of 'both' sites) - mean rho at adjacent UTRs is above the genomewide average!
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+Otherwise, rho is super low - and especially so in the few 'medium' tracts. 
 
 
 

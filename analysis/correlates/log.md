@@ -306,7 +306,7 @@ let L = size of intergenic tract
 
 how does RR vary in UTRs by the sizes of adjacent intergenic tracts?
 
-writing a new script that takes in the output of `intergenic_tract_analysis.py` 
+writing a new script that takes in the output of `intergenic_tract_lengths.py` 
 and appends rho values for adjacent UTRs
 
 ## 11/8/2019
@@ -341,6 +341,7 @@ chromosome_15 1945
 ```
 
 most UTRs were parsed correctly though - let's have a look at the rho values
+back in `intergenic_tract_analysis.Rmd`
 
 
 
