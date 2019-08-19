@@ -343,14 +343,106 @@ chromosome_15 1945
 most UTRs were parsed correctly though - let's have a look at the rho values
 back in `intergenic_tract_analysis.Rmd`
 
+## 15/8/2019
 
+to do:
+- repeat above analysis for 3' UTRs
+- look at hotspots in 5' and 3' UTRs - how do they vary by tract size?
 
+amending UTR script to also include 3' UTR values is going to be
+tough if iterating through intergenic tracts - need to take start of tract
+and iterate backwards (?) 
 
+what is the longest 3' UTR in the genome?
 
+```R
+> cols <- c('chrom', 'source', 'type', 'start', 'end', 'na', 'strand', 'frame', 'id')
+> d <- read_tsv('data/references/phytozome.gff', skip = 1, col_names = cols)
+> utrs <- d %>% filter(type == 'three_prime_UTR')
+> utrs %>% mutate(length = end - start) %>% select(length) %>% summary()
+     length
+ Min.   :   0.0
+ 1st Qu.: 400.0
+ Median : 648.0
+ Mean   : 771.7
+ 3rd Qu.: 995.0
+ Max.   :2999.0
+```
 
+I don't like this solution... but I guess the site iteration could work off 
+`p.fetch(chrom, utr_end - 3000, utr_end)` for now 
 
+wait - why did the first script also include `if record.is_utr3` if the
+iteration would always start at the end of a tract?? let's rerun that just
+to make sure it didn't affect the above results in any way
 
+```bash
+time python3.5 analysis/correlates/utr_rho.py \
+--fname data/correlates/intergenic_tract_rho.tsv \
+--table data/correlates/annotation_table_rho.txt.gz \
+--outname data/correlates/utr_tract_rho2.tsv
+```
 
+alright, we're good:
+
+```bash
+$ diff data/correlates/utr_tract_rho.tsv data/correlates/utr_tract_rho2.tsv | wc -l
+0
+```
+
+and now for the utr3 script:
+
+```bash
+time python3.5 analysis/correlates/utr3_rho.py \
+--fname data/correlates/intergenic_tract_rho.tsv \
+--table data/correlates/annotation_table_rho.txt.gz \
+--outname data/correlates/utr3_tract_rho.tsv
+```
+
+## 19/8/2019
+
+`utr3_rho.py` doesn't account for there being multiple 3' UTRs for some genes...
+
+need to make a filtered GFF with just `three_prime_UTR` lines, and then
+match with intergenic tracts by proximity
+
+could read in intergenic tract file and create lookup table
+
+calculate rho_vals and rho_count for all UTRs, and then for each row
+also have columns listing start/end for nearest intergenic tract
+
+getting UTRs out:
+
+```bash
+grep 'three_prime_UTR' data/references/final.strict.GFF3 | cut -f 1,4,5,9 > data/references/utr3_all.bed
+```
+
+also bringing in the 9th (info) column - could use gene names to
+make sure that intergenic tracts are matched correctly (ie shouldn't
+have two tracts attached to the same 'chain' of successive UTRs)
+
+first pass attempt:
+
+```bash
+time python3.5 analysis/correlates/utr3_rho.py \
+--bed data/references/utr3_all.bed \
+--fname data/correlates/intergenic_tract_rho.tsv \
+--table data/correlates/annotation_table_rho.txt.gz \
+--out data/correlates/utr3_tract_rho.tsv
+```
+
+I screwed up - got to remove scaffolds from the subsetted GFF above
+
+```bash
+grep 'three_prime_UTR' data/references/final.strict.GFF3 | \
+cut -f 1,4,5,9 | \
+grep -v 'scaffold' > data/references/utr3_all.bed
+```
+
+the script above still did all the chromosomes successfully though,
+and took ~16 min
+
+back to the Rmd file I go to work w/ this dataset
 
 
 
