@@ -77,6 +77,7 @@ def parse_utrs(bed, lookup, start_arrays, table, out):
             'utr3_rho_vals', 'utr3_rho_count', 'utr3_rho_window'
             ]
         writer = csv.DictWriter(f_out, delimiter='\t', fieldnames=fieldnames_out)
+        writer.writeheader()
         with open(bed, 'r', newline='') as f_in:
             fieldnames = ['chrom', 'start', 'end', 'info']
             reader = csv.DictReader(f_in, delimiter='\t', fieldnames=fieldnames)

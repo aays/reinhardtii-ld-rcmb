@@ -408,7 +408,7 @@ match with intergenic tracts by proximity
 
 could read in intergenic tract file and create lookup table
 
-calculate rho_vals and rho_count for all UTRs, and then for each row
+calculate `rho_vals` and `rho_count` for all UTRs, and then for each row
 also have columns listing start/end for nearest intergenic tract
 
 getting UTRs out:
@@ -444,8 +444,55 @@ and took ~16 min
 
 back to the Rmd file I go to work w/ this dataset
 
+## 20/8/2019
 
+so it looks like the pattern holds in 3' UTRs for the most part
 
+I've added a new bin, 'extended', for intergenic tracts > 8 kb (since
+the intergenic annotation outnumbers upstream/downstreams sites in
+these tracts)
+
+in extended tracts, rho in both UTR types is approx. equivalent;
+in long tracts, five prime rho is higher than three prime,
+but in medium tracts three prime rho is higher than five prime
+
+in short tracts, both UTRs are approx equivalent, but three prime slightly higher
+
+to do:
+- compare hotspots in UTRs/tracts by tract size
+- validate 2 kb definition of upstream/downstream - could it be that rho 'peaks' < 2 kb from genes
+
+the data from the hotspot enrichment analysis are insufficient for joining w/ tract data -
+will need to write a new script that parses hotspots and lists counts/other info with intergenic tracts
+
+need to create a 'combined' 2 kb summary file for this:
+
+```bash
+cd data/ldhelmet/block_5
+touch genome_summarised.txt
+head -n 1 chromosome_1_summarised.txt >> genome_summarised.txt
+for i in {1..17}; do
+    awk 'NR%2==0' chromosome_${i}_summarised.txt >> genome_summarised.txt;
+done
+```
+
+the `awk` command here prints every second line, effectively ensuring
+non-overlapping 2 kb windows starting from position 0
+
+using the block 5 dataset here since that is specifically for hotspot detection
+
+this looks messy and will probably break, but here's a naive run:
+
+```bash
+time python3.5 analysis/correlates/intergenic_hotspots.py \
+--fname data/ldhelmet/block_5/genome_summarised.txt \
+--intergenic data/correlates/intergenic_tract_rho.tsv \
+--out data/correlates/intergenic_tract_hotspots.tsv
+```
+
+that worked?? and only took 1.5 seconds???? oh man I love numpy
+
+back to the Rmd I go with this
 
 
 
