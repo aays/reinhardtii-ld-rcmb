@@ -80,6 +80,13 @@ def parse_tracts(hotspots, hotspot_arrays, intergenic, out):
 
     for cases 1 and 3, there can only be one hotspot for each by definition - 
     more than one found will break the fxn
+
+    needs to consider tracts < 2kb separately though, since if these overlap
+    a hotspot then either:
+    1. the whole tract is covered by two adjacent hotspots
+    2. the tract is partially covered by one hotspot that extends past it
+    3. the whole tract is covered by one hotspot
+    4. no hotspots overlap the tract
     """
     with open(out, 'w', newline='') as f_out:
         fieldnames = [
@@ -98,37 +105,64 @@ def parse_tracts(hotspots, hotspot_arrays, intergenic, out):
                 n_hotspots, sites_in_hotspot = 0, 0
                 tract_start = int(tract['start'])
                 tract_end = int(tract['end'])
-                # hotspots that are fully contained in tract
-                fully_within_tract = (hotspot_arrays[chrom] >= tract_start) & \
-                        (hotspot_arrays[chrom] <= tract_end) & \
-                        (hotspot_arrays[chrom] + 2000 <= tract_end)
-                tract_hotspots = np.append(tract_hotspots, 
-                        hotspot_arrays[chrom][fully_within_tract])
-                sites_in_hotspot += 2000 * tract_hotspots.size
-                # hotspots that start before tract but end in it
-                end_within_tract = (hotspot_arrays[chrom] + 2000 >= tract_start) & \
-                        (hotspot_arrays[chrom] + 2000 <= tract_start + 2000) # has to end within first 2 kb
-                end_within = hotspot_arrays[chrom][end_within_tract]
-                tract_hotspots = np.append(tract_hotspots, end_within)
-                try:
-                    assert end_within.size <= 1
-                except:
-                    print(tract, end_outside)
-                    sys.exit()
-                if end_within.size:
-                    sites_in_hotspot += ((end_within + 2000) - tract_start)[0]
-                # hotspots that start in tract but end outside
-                end_outside_tract = (hotspot_arrays[chrom] <= tract_end) & \
-                        (hotspot_arrays[chrom] + 2000 >= tract_end)
-                end_outside = hotspot_arrays[chrom][end_outside_tract]
-                tract_hotspots = np.append(tract_hotspots, end_outside)
-                try:
-                    assert end_outside.size <= 1
-                except:
-                    print(tract, end_outside)
-                    sys.exit()
-                if end_outside.size:
-                    sites_in_hotspot += (tract_end - end_outside)[0]
+                tract_size = tract_end - tract_start
+                if tract_size > 2000:
+                    # hotspots that are fully contained in tract
+                    fully_within_tract = (hotspot_arrays[chrom] >= tract_start) & \
+                            (hotspot_arrays[chrom] <= tract_end) & \
+                            (hotspot_arrays[chrom] + 2000 <= tract_end)
+                    tract_hotspots = np.append(tract_hotspots, 
+                            hotspot_arrays[chrom][fully_within_tract])
+                    sites_in_hotspot += 2000 * tract_hotspots.size
+                    # hotspots that start before tract but end in it
+                    end_within_tract = (hotspot_arrays[chrom] + 2000 >= tract_start) & \
+                            (hotspot_arrays[chrom] + 2000 <= tract_start + 2000) # has to end within first 2 kb
+                    end_within = hotspot_arrays[chrom][end_within_tract]
+                    tract_hotspots = np.append(tract_hotspots, end_within)
+                    try:
+                        assert end_within.size <= 1
+                    except:
+                        print(tract, end_outside, '125')
+                        sys.exit()
+                    if end_within.size:
+                        sites_in_hotspot += ((end_within + 2000) - tract_start)[0]
+                    # hotspots that start in tract but end outside
+                    end_outside_tract = (hotspot_arrays[chrom] <= tract_end) & \
+                            (hotspot_arrays[chrom] + 2000 >= tract_end)
+                    end_outside = hotspot_arrays[chrom][end_outside_tract]
+                    tract_hotspots = np.append(tract_hotspots, end_outside)
+                    try:
+                        assert end_outside.size <= 1
+                    except:
+                        print(tract, end_outside, '137')
+                        sys.exit()
+                    if end_outside.size:
+                        sites_in_hotspot += (tract_end - end_outside)[0]
+                elif tract_size <= 2000:
+                    start_before_tract = (hotspot_arrays[chrom] + 2000 >= tract_start) & \
+                        (hotspot_arrays[chrom] + 2000 <= tract_start + 2000)
+                    start_before = hotspot_arrays[chrom][start_before_tract]    
+                    # whole tract is in one hotspot
+                    if start_before.size == 1 and tract_end <= (start_before + 2000)[0]:
+                        tract_hotspots = np.append(tract_hotspots,
+                                start_before)
+                        sites_in_hotspot = tract_size
+                        continue
+                    # hotspot ends before tract does
+                    elif start_before.size == 1 and tract_end > (start_before + 2000)[0]:
+                        tract_hotspots = np.append(tract_hotspots,
+                                start_before)
+                        sites_in_hotspot += (start_before + 2000 -
+                                tract_start)[0]
+                    end_after_tract = (hotspot_arrays[chrom] > tract_start) & \
+                            (hotspot_arrays[chrom] + 2000 > tract_end) & \
+                            (hotspot_arrays[chrom] + 2000 < tract_end + 2000)
+                    end_after = hotspot_arrays[chrom][end_after_tract]
+                    # hotspot starts in tract but ends after
+                    if end_after.size == 1:
+                        tract_hotspots = np.append(tract_hotspots,
+                                end_after)
+                        sites_in_hotspot += (tract_end - end_after)[0]
                 # populate out dict
                 if tract_hotspots.size != 0:
                     for start in tract_hotspots:
@@ -136,6 +170,12 @@ def parse_tracts(hotspots, hotspot_arrays, intergenic, out):
                         flank_sum += full_dict['flank_rate']
                         block_sum += full_dict['block_rate']
                         rate_sum += full_dict['rate_ratio']
+                    try:
+                        assert sites_in_hotspot <= tract_size
+                    except:
+                        print(chrom, tract_start, tract_end, tract_size,
+                                sites_in_hotspot, '175')
+                        sys.exit()
                 out_dict = deepcopy(tract)
                 out_dict['flank_sum'] = flank_sum
                 out_dict['block_sum'] = block_sum
