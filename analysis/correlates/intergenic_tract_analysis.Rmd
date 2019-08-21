@@ -233,7 +233,7 @@ How does rho vary in UTRs by bin?
 
 ```{r}
 # 5' UTRs
-utr_full %>% 
+utr_tracts %>% 
   group_by(bin) %>% 
   summarise(
     total_rho = sum(utr_rho_vals),
@@ -266,7 +266,11 @@ utr3_full %>%
 
 In the 'extended' bin (ie no instances of 'both' sites) - mean rho at adjacent UTRs is well above the genomewide average!
 
-Otherwise, rho is super low - and especially so in the few 'medium' tracts. 
+Otherwise, rho is very low in most 5' UTRs, which matches the patterns seen in intergenic rho by tract length -
+ie in shorter tracts, intergenic rho lower -> UTR rho lower, but in 'long' tracts, more upstream/downstream sites ->
+higher rho -> higher rho in UTRs (trend most apparent in 'extended' bin)
+
+similar trend in 3' UTRs, although long tract rho is less
 
 ```{r}
 utr_bars <- utr_full %>% 
