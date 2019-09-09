@@ -494,5 +494,39 @@ that worked?? and only took 1.5 seconds???? oh man I love numpy
 
 back to the Rmd I go with this
 
+## 9/9/2019
+
+to do:
+- write script that pulls rho for 'edges' of intergenic tracts
+    - script should take in a 'gene proximate size' as input
+
+here goes, with 2 kb:
+
+```bash
+time python3.5 analysis/correlates/intergenic_tract_proximal.py \
+--fname data/correlates/intergenic_tract_rho.tsv \
+--table data/correlates/annotation_table_rho.txt.gz \
+--windowsize 2000 \
+--outfile data/correlates/intergenic_flanks_2kb.tsv
+```
+
+script is working - projected to take ~10 min to complete, which isn't awful
+
+also running for 500 bp and 1 kb
+
+```bash
+time python3.5 analysis/correlates/intergenic_tract_proximal.py \
+--fname data/correlates/intergenic_tract_rho.tsv \
+--table data/correlates/annotation_table_rho.txt.gz \
+--windowsize 1000 \
+--outfile data/correlates/intergenic_flanks_1kb.tsv
+
+time python3.5 analysis/correlates/intergenic_tract_proximal.py \
+--fname data/correlates/intergenic_tract_rho.tsv \
+--table data/correlates/annotation_table_rho.txt.gz \
+--windowsize 500 \
+--outfile data/correlates/intergenic_flanks_500.tsv
+```
+
 
 
