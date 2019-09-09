@@ -33,6 +33,11 @@ Schematic:
   - upstream = downstream = 2 kb
   - intergenic = L - 4
   - both = 0
+- greater than 8 kb ('extended')
+  - upstream = downstream = 2 kb
+  - intergenic = L - 4
+  - both = 0
+  - intergenic > upstream/downstream
   
   
 ```{r}
@@ -41,24 +46,28 @@ d_bins <- d %>%
     bin = case_when(
       tract_size <= 2000 ~ 'short',
       tract_size > 2000 & tract_size <= 4000 ~ 'medium',
-      tract_size > 4000 ~ 'long'
+      tract_size > 4000 & tract_size <= 8000 ~ 'long',
+      tract_size > 8000 ~ 'extended'
     )
   ) %>% 
   mutate(
     both_sites = case_when(
       bin == 'short' ~ tract_size,
       bin == 'medium' ~ tract_size - (2 * (tract_size - 2000)),
-      bin == 'long' ~ 0
+      bin == 'long' ~ 0,
+      bin == 'extended' ~ 0,
     ),
     upstream_sites = case_when(
       bin == 'short' ~ 0,
       bin == 'medium' ~ tract_size - 2000,
-      bin == 'long' ~ 2000
+      bin == 'long' ~ 2000,
+      bin == 'extended' ~ 2000,
     ),
     intergenic_sites = case_when(
       bin == 'short' ~ 0,
       bin == 'medium' ~ 0,
-      bin == 'long' ~ tract_size - 4000
+      bin == 'long' ~ tract_size - 4000,
+      bin == 'extended' ~ tract_size - 4000
     )
   ) %>% 
   mutate(downstream_sites = upstream_sites)
@@ -71,6 +80,10 @@ Overall tract sizes:
 ```{r}
 ggplot(d_bins, aes(x = log10(tract_size))) +
   geom_histogram() +
+  theme_bw()
+
+ggplot(d_bins, aes(x = log10(tract_size))) +
+  stat_ecdf() +
   theme_bw()
 ```
 
@@ -159,10 +172,44 @@ The overall trend looks pretty messy though:
 
 ```{r}
 ggplot(d_bins, aes(x = log10(tract_size), y = log10(rho_window))) +
-  geom_point(alpha = 0.4) +
+  geom_point(alpha = 0.4, aes(color = bin)) +
   geom_smooth(method = 'lm')
 
 ```
+
+Bin tract size on log scale and correlate with rho:
+
+```{r}
+d_bins_log <- d_bins %>% 
+  mutate(log_size = log10(tract_size)) %>% 
+  mutate(log_bin = floor(log_size)) %>% 
+  group_by(log_bin) %>% 
+  summarise(
+    total_rho = sum(rho_vals),
+    total_count = sum(rho_count),
+    sd_rho = sd(rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  ) %>% 
+  mutate(bin_start = as.integer(10 ^ log_bin),
+         bin_end = lead(bin_start)) %>% 
+  mutate(bin_end = ifelse(is.na(bin_end), Inf, bin_end)) %>% 
+  mutate(bin_name = paste0(bin_start, '-', bin_end))
+
+d_bins_log
+
+d_bins_log %>% 
+  filter(bin_start != 100000) %>% 
+  ggplot(aes(x = bin_name, y = mean_rho)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = mean_rho - se_rho, ymax = mean_rho + se_rho))
+```
+
+
 
 ## Rho in UTRs
 
@@ -171,15 +218,22 @@ utr <- here('data/correlates/utr_tract_rho.tsv') %>%
   read_tsv(col_types = cols()) %>% 
   filter(tract_size > 0)
 
-utr_full <- left_join(
-  utr, d_bins, 
+utr3 <- here('data/correlates/utr3_tract_rho.tsv') %>% 
+  read_tsv(col_types = cols())
+
+utr_tracts <- left_join(utr, d_bins, 
   by = c('chrom', 'start', 'end', 'tract_size', 'rho_vals', 'rho_count', 'rho_window'))
+
+utr3_full <- left_join(utr3, d_bins,
+  by = c('chrom', 'start', 'end')) %>% 
+  filter(!is.na(bin))
 ```
 
 How does rho vary in UTRs by bin?
 
 ```{r}
-utr_full %>% 
+# 5' UTRs
+utr_tracts %>% 
   group_by(bin) %>% 
   summarise(
     total_rho = sum(utr_rho_vals),
@@ -192,11 +246,142 @@ utr_full %>%
     mean_rho = total_rho / total_count,
     se_rho = sd_rho / sqrt(n)
   )
+
+# 3' UTRs
+utr3_full %>% 
+  group_by(bin) %>% 
+  summarise(
+    total_rho = sum(utr3_rho_vals),
+    total_count = sum(utr3_rho_count),
+    sd_rho = sd(utr3_rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  )
+  
 ```
 
-In the 'long' bin (ie no instances of 'both' sites) - mean rho at adjacent UTRs is above the genomewide average!
+In the 'extended' bin (ie no instances of 'both' sites) - mean rho at adjacent UTRs is well above the genomewide average!
 
-Otherwise, rho is super low - and especially so in the few 'medium' tracts. 
+Otherwise, rho is very low in most 5' UTRs, which matches the patterns seen in intergenic rho by tract length -
+ie in shorter tracts, intergenic rho lower -> UTR rho lower, but in 'long' tracts, more upstream/downstream sites ->
+higher rho -> higher rho in UTRs (trend most apparent in 'extended' bin)
+
+similar trend in 3' UTRs, although long tract rho is less
+
+```{r}
+utr_bars <- utr_full %>% 
+  group_by(bin) %>% 
+  summarise(
+    total_rho = sum(utr_rho_vals),
+    total_count = sum(utr_rho_count),
+    sd_rho = sd(utr_rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  )
+
+utr3_bars <- utr3_full %>% 
+  group_by(bin) %>% 
+  summarise(
+    total_rho = sum(utr3_rho_vals),
+    total_count = sum(utr3_rho_count),
+    sd_rho = sd(utr3_rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  )
+
+utr_bars_all <- bind_rows(utr_bars, utr3_bars, .id = 'name') %>% 
+  mutate(utr = case_when(
+    name == 1 ~ 'five_prime',
+    name == 2 ~ 'three_prime')
+  )
+
+ggplot(utr_bars_all, aes(x = bin, y = mean_rho, fill = utr)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  geom_errorbar(width = 0.4, position = position_dodge(width = 0.9),
+    aes(ymin = mean_rho - se_rho, 
+        ymax = mean_rho + se_rho)) +
+  theme_minimal()
+
+
+```
+
+
+How does this look for percentile bins of tract length?
+
+```{r}
+utr_full %>% 
+  select(tract_size, utr_rho_window) %>%
+  arrange(tract_size) %>% 
+  mutate(tract_percentile = percent_rank(tract_size)) %>% 
+  mutate(percentile_bin = floor(tract_percentile / 0.05) * 0.05) %>% 
+  ggplot(aes(x = tract_percentile, y = utr_rho_window)) +
+  geom_point() +
+  geom_smooth()
+
+```
+
+
+## Hotspots in intergenic tracts
+
+```{r}
+intergenic_hotspots <- here('data/correlates/intergenic_tract_hotspots.tsv') %>% 
+  read_tsv(col_types = cols()) %>% 
+  filter(tract_size > 0) %>% 
+  left_join(d_bins, by = c('chrom', 'start', 'end', 'rho_vals', 'rho_count', 'tract_size', 'rho_window'))
+```
+
+Hotspot counts/proportions by bin:
+
+```{r}
+intergenic_hotspots %>% 
+  group_by(bin) %>% 
+  summarise(
+    avg_n_hotspots = mean(n_hotspots),
+    avg_sites_in_hotspot = sum(sites_in_hotspot) / sum(rho_count),
+    avg_upstream = mean(upstream_sites),
+    avg_downstream = mean(downstream_sites),
+    avg_both = mean(both_sites),
+    avg_intergenic = mean(intergenic_sites)
+  )
+```
+
+Hotspot strength:
+
+```{r}
+intergenic_hotspots %>% 
+  filter(n_hotspots > 0) %>% 
+  mutate(rate_ratio = rate_sum / n_hotspots) %>% 
+  filter(rate_ratio < 2000) %>% # one freak hotspot
+  group_by(bin) %>% 
+  summarise(mean(rate_ratio))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
