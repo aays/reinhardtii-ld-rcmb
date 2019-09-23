@@ -1,0 +1,857 @@
+---
+title: "Intergenic tract analysis"
+author: Ahmed Hasan
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(fs)
+library(here)
+
+
+din1 <- 6.34375
+din2 <- 3.385417
+```
+
+## Load data
+
+```{r}
+d <- here('data/correlates/intergenic_tract_rho.tsv') %>% 
+  read_tsv(col_types = cols()) %>% 
+  filter(tract_size > 0)
+```
+
+Schematic:
+- less than 2 kb ('short')
+  - both = L
+- 2 kb - 4 kb ('medium')
+  - D = L - 2
+  - upstream = downstream = D
+  - both = L - 2D
+- greater than 4 kb ('long')
+  - upstream = downstream = 2 kb
+  - intergenic = L - 4
+  - both = 0
+- greater than 8 kb ('extended')
+  - upstream = downstream = 2 kb
+  - intergenic = L - 4
+  - both = 0
+  - intergenic > upstream/downstream
+  
+  
+```{r}
+d_bins <- d %>% 
+  mutate(
+    bin = case_when(
+      tract_size <= 2000 ~ 'short',
+      tract_size > 2000 & tract_size <= 4000 ~ 'medium',
+      tract_size > 4000 & tract_size <= 8000 ~ 'long',
+      tract_size > 8000 ~ 'extended'
+    )
+  ) %>% 
+  mutate(
+    both_sites = case_when(
+      bin == 'short' ~ tract_size,
+      bin == 'medium' ~ tract_size - (2 * (tract_size - 2000)),
+      bin == 'long' ~ 0,
+      bin == 'extended' ~ 0,
+    ),
+    upstream_sites = case_when(
+      bin == 'short' ~ 0,
+      bin == 'medium' ~ tract_size - 2000,
+      bin == 'long' ~ 2000,
+      bin == 'extended' ~ 2000,
+    ),
+    intergenic_sites = case_when(
+      bin == 'short' ~ 0,
+      bin == 'medium' ~ 0,
+      bin == 'long' ~ tract_size - 4000,
+      bin == 'extended' ~ tract_size - 4000
+    )
+  ) %>% 
+  mutate(downstream_sites = upstream_sites)
+```
+
+## Distributions
+
+Overall tract sizes:
+
+```{r}
+d_bins %>% 
+  filter(tract_size < 10000) %>% 
+  ggplot(aes(x = tract_size)) +
+  geom_histogram() +
+  theme_bw()
+
+d_bins %>% 
+  filter(tract_size < 10000) %>% 
+  ggplot(aes(x = log10(tract_size))) +
+  geom_histogram() +
+  theme_bw()
+
+# get proportion of genome for each intergenic bins
+# is most of the intergenic sequence in the larger tracts? 
+
+ggplot(d_bins, aes(x = log10(tract_size))) +
+  stat_ecdf() +
+  theme_bw()
+```
+
+```{r}
+# tract size at 50th percentile
+
+d_bins %>% 
+  mutate(perc_rank = percent_rank(tract_size)) %>% 
+  arrange(perc_rank) %>% 
+  select(tract_size, perc_rank) %>% 
+  filter(perc_rank > 0.498, perc_rank < 0.503) # 142 bp
+```
+
+
+Tract sizes by annotation:
+
+```{r}
+d_bins %>% 
+  select(ends_with('sites')) %>% 
+  summary()
+```
+
+Looks how we'd expect, with both/upstream/downstream capped at 2000 and intergenic being much larger
+
+Tract counts by bin:
+
+```{r}
+d_bins %>% 
+  group_by(bin) %>% 
+  tally() %>% 
+  mutate(prop = n / sum(n))
+```
+
+Short tracts make up *90.9 percent* of all intergenic tracts! 
+
+Rho distributions by tract size:
+
+```{r}
+d_bins %>% 
+  ggplot(aes(x = bin, y = log10(rho_window))) +
+  geom_boxplot() +
+  geom_jitter(alpha = 0.2)
+```
+
+```{r}
+d_bins %>% 
+  group_by(bin) %>% 
+  summarise(
+    total_rho = sum(rho_vals),
+    total_count = sum(rho_count),
+    sd_rho = sd(rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  )
+```
+
+Visualizing this:
+
+```{r}
+d_summarised <- d_bins %>% 
+  group_by(bin) %>% 
+  summarise(
+    total_rho = sum(rho_vals),
+    total_count = sum(rho_count),
+    sd_rho = sd(rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  ) %>% 
+  mutate(prop = n / sum(n)) %>% 
+  select(bin, prop, n, mean_rho, se_rho)
+
+d_summarised %>% 
+  ggplot(aes(x = bin, y = mean_rho)) +
+  geom_bar(stat = 'identity') +
+  geom_errorbar(
+    aes(ymax = mean_rho + se_rho, ymin = mean_rho - se_rho),
+    size = 0.4, width = 0.3
+  ) +
+  theme_classic()
+
+d_summarised %>% 
+  ggplot(aes(x = bin, y = n)) +
+  geom_bar(stat = 'identity') +
+  theme_classic()
+```
+
+The overall trend looks pretty messy though:
+
+```{r}
+ggplot(d_bins, aes(x = log10(tract_size), y = rho_window)) +
+  geom_point(alpha = 0.05, aes(color = bin)) +
+  geom_smooth(method = 'lm') +
+  coord_cartesian(y = c(0, 0.02))
+
+```
+
+KDEs for each log tract size with rho on the x and tract count on the y
+
+```{r}
+ggplot(d_bins, aes(x = rho_window, fill = bin, color = bin)) +
+  geom_density(alpha = 0.2, position = 'stack') +
+  coord_cartesian(x = c(0, 0.02))
+```
+
+
+
+Bin tract size on log scale and correlate with rho:
+
+```{r}
+d_bins_log <- d_bins %>% 
+  mutate(log_size = log10(tract_size)) %>% 
+  mutate(log_bin = floor(log_size)) %>% 
+  group_by(log_bin) %>% 
+  summarise(
+    total_rho = sum(rho_vals),
+    total_count = sum(rho_count),
+    sd_rho = sd(rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  ) %>% 
+  mutate(bin_start = as.integer(10 ^ log_bin),
+         bin_end = lead(bin_start)) %>% 
+  mutate(bin_end = ifelse(is.na(bin_end), Inf, bin_end)) %>% 
+  mutate(bin_name = paste0(bin_start, '-', bin_end))
+
+d_bins_log
+
+d_bins_log %>% 
+  filter(bin_start != 100000) %>% 
+  ggplot(aes(x = bin_name, y = mean_rho)) +
+  geom_point() +
+  geom_errorbar(
+    aes(ymin = mean_rho - se_rho, 
+        ymax = mean_rho + se_rho)) +
+  theme_bw() +
+  labs(
+    x = 'Tract size (bp)',
+    y = expression(paste(rho))
+  )
+
+```
+
+rewrite in terms of 'gene proximal' intergenic sequence
+
+try with windowsizes of 1 kb and 2 kb
+
+squelch bins >1000 kb into single bin (since so few tracts are > 10 kb)
+
+
+## Rho in UTRs
+
+```{r}
+utr <- here('data/correlates/utr_tract_rho.tsv') %>% 
+  read_tsv(col_types = cols()) %>% 
+  filter(tract_size > 0)
+
+utr3 <- here('data/correlates/utr3_tract_rho.tsv') %>% 
+  read_tsv(col_types = cols())
+
+utr_tracts <- left_join(utr, d_bins, 
+  by = c('chrom', 'start', 'end', 'tract_size', 'rho_vals', 'rho_count', 'rho_window'))
+
+utr3_full <- left_join(utr3, d_bins,
+  by = c('chrom', 'start', 'end')) %>% 
+  filter(!is.na(bin))
+```
+
+How does rho vary in UTRs by bin?
+
+```{r}
+# 5' UTRs
+utr_tracts %>% 
+  group_by(bin) %>% 
+  summarise(
+    total_rho = sum(utr_rho_vals),
+    total_count = sum(utr_rho_count),
+    sd_rho = sd(utr_rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  )
+
+# how much is rho lower in UTRs next to tracts <4 kb than not?
+
+utr_tracts %>% 
+  mutate(bin = case_when(
+    bin %in% c('short', 'medium') ~ '<4kb',
+    bin %in% c('long', 'extended') ~ '>4kb'
+  )) %>% 
+  group_by(bin) %>% 
+  summarise(
+    total_rho = sum(utr_rho_vals),
+    total_count = sum(utr_rho_count)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count
+  ) %>% 
+  select(bin, mean_rho) %>% 
+  spread(bin, mean_rho) %>% 
+  mutate(percent_decrease = (`>4kb` - `<4kb`) / `>4kb`) # 27%
+
+# 3' UTRs
+utr3_full %>% 
+  group_by(bin) %>% 
+  summarise(
+    total_rho = sum(utr3_rho_vals),
+    total_count = sum(utr3_rho_count),
+    sd_rho = sd(utr3_rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  )
+  
+```
+
+In the 'extended' bin (ie no instances of 'both' sites) - mean rho at adjacent UTRs is well above the genomewide average!
+
+Otherwise, rho is very low in most 5' UTRs, which matches the patterns seen in intergenic rho by tract length -
+ie in shorter tracts, intergenic rho lower -> UTR rho lower, but in 'long' tracts, more upstream/downstream sites ->
+higher rho -> higher rho in UTRs (trend most apparent in 'extended' bin)
+
+similar trend in 3' UTRs, although long tract rho is less
+
+```{r}
+utr_bars <- utr_tracts %>% 
+  group_by(bin) %>% 
+  summarise(
+    total_rho = sum(utr_rho_vals),
+    total_count = sum(utr_rho_count),
+    sd_rho = sd(utr_rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  )
+
+utr3_bars <- utr3_full %>% 
+  group_by(bin) %>% 
+  summarise(
+    total_rho = sum(utr3_rho_vals),
+    total_count = sum(utr3_rho_count),
+    sd_rho = sd(utr3_rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  )
+
+utr_bars_all <- bind_rows(utr_bars, utr3_bars, .id = 'name') %>% 
+  mutate(utr = case_when(
+    name == 1 ~ 'five_prime',
+    name == 2 ~ 'three_prime')
+  )
+
+ggplot(utr_bars_all, aes(x = bin, y = mean_rho, fill = utr)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  geom_errorbar(width = 0.4, position = position_dodge(width = 0.9),
+    aes(ymin = mean_rho - se_rho, 
+        ymax = mean_rho + se_rho)) +
+  theme_minimal()
+
+
+```
+
+
+How does this look for percentile bins of tract length?
+
+```{r}
+utr5_tracts %>% 
+  select(tract_size, utr_rho_window) %>%
+  arrange(tract_size) %>% 
+  mutate(tract_percentile = percent_rank(tract_size)) %>% 
+  mutate(percentile_bin = floor(tract_percentile / 0.05) * 0.05) %>% 
+  ggplot(aes(x = tract_percentile, y = utr_rho_window)) +
+  geom_point() +
+  geom_smooth()
+
+```
+
+
+## Hotspots in intergenic tracts
+
+```{r}
+intergenic_hotspots <- here('data/correlates/intergenic_tract_hotspots.tsv') %>% 
+  read_tsv(col_types = cols()) %>% 
+  filter(tract_size > 0) %>% 
+  left_join(d_bins, by = c('chrom', 'start', 'end', 'rho_vals', 'rho_count', 'tract_size', 'rho_window'))
+```
+
+Hotspot counts/proportions by bin:
+
+```{r}
+intergenic_hotspots %>% 
+  group_by(bin) %>% 
+  summarise(
+    avg_n_hotspots = mean(n_hotspots),
+    avg_sites_in_hotspot = sum(sites_in_hotspot) / sum(rho_count),
+    avg_upstream = mean(upstream_sites),
+    avg_downstream = mean(downstream_sites),
+    avg_both = mean(both_sites),
+    avg_intergenic = mean(intergenic_sites)
+  )
+```
+
+Hotspot strength:
+
+```{r}
+intergenic_hotspots %>% 
+  filter(n_hotspots > 0) %>% 
+  mutate(rate_ratio = rate_sum / n_hotspots) %>% 
+  filter(rate_ratio < 2000) %>% # one freak hotspot
+  group_by(bin) %>% 
+  summarise(mean(rate_ratio))
+```
+
+does spatial distance between genes correlate with expression? 
+
+## Varying flank sizes
+
+Load in data:
+
+```{r}
+flank_100 <- read_tsv(here('data/correlates/intergenic_flanks_100.tsv'), col_types = cols()) %>% 
+  left_join(select(d, -tract_size), by = c('chrom', 'start', 'end'))
+flank_500 <- read_tsv(here('data/correlates/intergenic_flanks_500.tsv'), col_types = cols()) %>% 
+  left_join(select(d, -tract_size), by = c('chrom', 'start', 'end'))
+flank_1kb <- read_tsv(here('data/correlates/intergenic_flanks_1kb.tsv'), col_types = cols()) %>% 
+  left_join(select(d, -tract_size), by = c('chrom', 'start', 'end'))
+flank_2kb <- read_tsv(here('data/correlates/intergenic_flanks_2kb.tsv'), col_types = cols()) %>% 
+  left_join(select(d, -tract_size), by = c('chrom', 'start', 'end'))
+```
+
+
+Split into bins of tracts <= 4 kb and > 4 kb:
+
+```{r}
+list(flank_500, flank_1kb, flank_2kb, flank_100) %>% 
+  map_dfr(~ mutate(., type = case_when(
+    tract_size <= 4000 ~ 'short',
+    tract_size > 4000 ~ 'long'
+  )) %>% 
+  group_by(type) %>% 
+  summarise(
+    mean_left = mean(left_window),
+    mean_right = mean(right_window)
+  ), .id = 'name'
+)
+
+```
+
+```{r}
+flank_2kb %>% 
+  filter(tract_size > 2000) %>% 
+  select(-left_vals, -left_count, -left_window) %>% # remove downstream
+  mutate(window = floor(tract_size / 2000) * 2000) %>% 
+  mutate(window = ifelse(tract_size >= 10000, 10000, window)) %>% 
+  group_by(window) %>% 
+  summarise(total_right_vals = sum(right_vals), total_right_count = sum(right_count), n = n()) %>% 
+  mutate(mean_right = total_right_vals / total_right_count) %>% 
+  ggplot(aes(x = as.factor(window), y = mean_right)) +
+  geom_point()
+  
+```
+
+
+Seems the gene proximal regions are *way* higher in the longer tract flanks for all three windowsizes
+
+Let's stick to the 2 kb window for simplicity
+
+```{r}
+flank_2kb %>% 
+  mutate(type = case_when(
+    tract_size <= 4000 ~ 'short',
+    tract_size > 4000 ~ 'long'
+  )) %>% 
+  group_by(type) %>% 
+  summarise(
+    mean_left = mean(left_window),
+    mean_right = mean(right_window)
+  )
+```
+
+```{r}
+# short
+flank_2kb %>% 
+  filter(tract_size <= 4000) %>% 
+  select(contains('left'), contains('right')) %>% 
+  summary()
+
+# long
+flank_2kb %>% 
+  filter(tract_size > 4000) %>% 
+  select(contains('left'), contains('right')) %>% 
+  summary()
+```
+
+```{r}
+flank_2kb %>% 
+  mutate(type = case_when(
+    tract_size <= 4000 ~ 'short',
+    tract_size > 4000 ~ 'long'
+  )) %>% 
+  select(type, left_window, right_window) %>% 
+  gather(window, value, -type) %>% 
+  ggplot(aes(x = value, fill = type)) +
+  geom_density(alpha = 0.2) +
+  coord_cartesian(x = c(0, 0.25)) +
+  facet_wrap(~ type)
+
+# cdf
+flank_2kb %>% 
+  mutate(type = case_when(
+    tract_size <= 4000 ~ 'short',
+    tract_size > 4000 ~ 'long'
+  )) %>% 
+  select(type, left_window, right_window) %>% 
+  gather(window, value, -type) %>% 
+  ggplot(aes(x = value, color = type)) +
+  stat_ecdf() +
+  coord_cartesian(x = c(0, 0.1))
+```
+
+```{r}
+# percent decrease
+flank_2kb %>% 
+  mutate(type = case_when(
+    tract_size <= 4000 ~ 'short',
+    tract_size > 4000 ~ 'long'
+  )) %>% 
+  group_by(type) %>% 
+  summarise(
+    total_rho_left = sum(left_vals),
+    total_count_left = sum(left_count),
+    total_rho_right = sum(right_vals),
+    total_count_right = sum(right_count)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho_left = total_rho_left / total_count_left,
+    mean_rho_right = total_rho_right / total_count_right
+  ) %>% 
+  select(type, mean_rho_left, mean_rho_right) %>% 
+  gather(window, value, -type) %>% 
+  spread(type, value) %>% 
+  mutate(percent_decrease = (long - short) / long)
+
+# log tract size plot
+flank_log <- flank_2kb %>% 
+  mutate(log_size = log10(tract_size)) %>% 
+  mutate(log_bin = floor(log_size)) %>% 
+  group_by(log_bin) %>% 
+  summarise(
+    total_rho_left = sum(left_vals),
+    total_count_left = sum(left_count),
+    sd_left = sd(left_window),
+    total_rho_right = sum(right_vals),
+    total_count_right = sum(right_count),
+    sd_right = sd(right_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho_left = total_rho_left / total_count_left,
+    mean_rho_right = total_rho_right / total_count_right,
+    se_left = sd_left / sqrt(n),
+    se_right = sd_right / sqrt(n)
+  ) %>% 
+  mutate(bin_start = as.integer(10 ^ log_bin),
+         bin_end = lead(bin_start)) %>% 
+  mutate(bin_end = ifelse(is.na(bin_end), Inf, bin_end)) %>% 
+  mutate(bin_name = paste0(bin_start, '-', bin_end)) %>% 
+  select(-bin_start, -bin_end, -starts_with('total_count'), -starts_with('total_rho')) %>% 
+  gather(measure, value, -n, -bin_name, -log_bin) %>% 
+  mutate(type = str_extract(measure, '(left|right)')) %>% 
+  mutate(measure = str_replace(measure, '_(left|right)', '')) %>% 
+  spread(measure, value)
+  
+flank_log %>%  
+  ggplot(aes(x = bin_name, y = mean_rho, fill = type)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  geom_errorbar(aes(
+    ymin = mean_rho - se,
+    ymax = mean_rho + se),
+    width = 0.4, position = position_dodge(width = 0.9)
+  )
+
+d_bins_log %>% 
+  filter(bin_start != 100000) %>% 
+  ggplot(aes(x = bin_name, y = mean_rho)) +
+  geom_point() +
+  geom_errorbar(
+    aes(ymin = mean_rho - se_rho, 
+        ymax = mean_rho + se_rho)) +
+  theme_bw() +
+  labs(
+    x = 'Tract size (bp)',
+    y = expression(paste(rho))
+  )
+
+```
+
+Combine the two flanks into single data points:
+
+```{r}
+flank_log_combined <- flank_2kb %>% 
+  mutate(log_size = log10(tract_size)) %>% 
+  mutate(log_bin = floor(log_size)) %>% 
+  mutate(rho_vals = left_vals + right_vals,
+         rho_count = left_count + right_count) %>% 
+  mutate(rho_window = rho_vals / rho_count) %>% 
+  select(-left_vals, -right_vals, -left_count, 
+         -right_count, -left_window, -right_window) %>% 
+  group_by(log_bin) %>% 
+  summarise(
+    total_rho = sum(rho_vals),
+    total_count = sum(rho_count),
+    sd_rho = sd(rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  ) %>% 
+  mutate(bin_start = as.integer(10 ^ log_bin),
+         bin_end = lead(bin_start)) %>% 
+  mutate(bin_end = ifelse(is.na(bin_end), Inf, bin_end)) %>% 
+  mutate(bin_name = paste0(bin_start, '-', bin_end))
+
+flank_log_combined %>% 
+  filter(bin_start != 100000) %>% 
+  ggplot(aes(x = bin_name, y = mean_rho)) +
+  geom_point() +
+  geom_errorbar(
+    aes(ymin = mean_rho - se_rho, 
+        ymax = mean_rho + se_rho)) +
+  theme_bw() +
+  labs(
+    x = 'Tract size (bp)',
+    y = expression(paste(rho))
+  )
+```
+
+
+flank combined with overall rho by log tract size in same plot:
+
+(for bins < 1000, 'flank' and 'tract' should be the same thing ofc)
+
+```{r}
+d_bins_log %>% 
+  select(bin_name, bin_start, mean_rho, sd_rho, se_rho, n) %>% 
+  mutate(type = 'tract') %>% 
+  bind_rows(
+    flank_log_combined %>% 
+      select(bin_name, bin_start, mean_rho, sd_rho, se_rho, n) %>% 
+      mutate(type = 'flank')
+  ) %>% 
+  select(type, everything()) %>% 
+  filter(bin_start != 100000) %>% 
+  ggplot(aes(x = bin_name, y = mean_rho, fill = type)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  geom_errorbar(
+    aes(ymin = mean_rho - se_rho, 
+        ymax = mean_rho + se_rho),
+    width = 0.4, position = position_dodge(width = 0.9)) +
+  theme_bw() +
+  labs(
+    x = 'Tract size (bp)',
+    y = expression(paste(rho))
+  ) +
+  geom_hline(yintercept = 0.004086864, linetype = 'dashed') # genomewide mean
+```
+
+```{r}
+flank_2kb %>% 
+  filter(tract_size >= 10000, tract_size < 100000) %>% 
+  filter(left_window < 0.1, right_window < 0.1) %>% 
+  summary()
+```
+
+include non-flank rho as a third category:
+
+```{r}
+non_flank_2kb <- flank_2kb %>% 
+  mutate(log_size = log10(tract_size)) %>% 
+  mutate(log_bin = floor(log_size)) %>% 
+  filter(tract_size > 4000) %>% 
+  mutate(rho_vals = rho_vals - (left_vals + right_vals),
+         rho_count = rho_count - (left_count + right_count))
+
+non_flank_log_rho <- flank_2kb %>% 
+  mutate(log_size = log10(tract_size)) %>% 
+  mutate(log_bin = floor(log_size)) %>% 
+  filter(tract_size > 4000) %>% 
+  mutate(rho_vals = rho_vals - (left_vals + right_vals),
+         rho_count = rho_count - (left_count + right_count)) %>% 
+  select(chrom, start, end, tract_size, rho_vals, rho_count, log_size, log_bin) %>% 
+  mutate(rho_window = rho_vals / rho_count) %>% 
+  group_by(log_bin) %>% 
+  summarise(
+    total_rho = sum(rho_vals),
+    total_count = sum(rho_count),
+    sd_rho = sd(rho_window),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    mean_rho = total_rho / total_count,
+    se_rho = sd_rho / sqrt(n)
+  ) %>% 
+  mutate(bin_start = as.integer(10 ^ log_bin),
+         bin_end = lead(bin_start)) %>% 
+  mutate(bin_end = ifelse(is.na(bin_end), Inf, bin_end)) %>% 
+  mutate(bin_name = paste0(bin_start, '-', bin_end)) %>% 
+  mutate(type = 'non-flank')
+```
+
+Combine datasets:
+
+```{r}
+tracts_all <- d_bins_log %>% 
+  select(bin_name, bin_start, mean_rho, sd_rho, se_rho, n) %>% 
+  mutate(type = 'tract') %>% 
+  bind_rows(
+    flank_log_combined %>% 
+      select(bin_name, bin_start, mean_rho, sd_rho, se_rho, n) %>% 
+      mutate(type = 'flank')
+  ) %>% 
+  bind_rows(non_flank_log_rho) %>% 
+  select(type, everything()) %>%
+  filter(bin_start != 100000)
+
+tracts_all
+```
+
+Getting 95% bootstrap intervals for each of these categories:
+
+```{r}
+boot_fxn <- function(d, rep_count, current_log_bin, data_type) {
+  require(magrittr)
+  boot_obj <- replicate(rep_count, {
+    
+    sampled_rows <- d %>% 
+      mutate(log_size = log10(tract_size)) %>% 
+      mutate(log_bin = floor(log_size)) %>% 
+      mutate(bin_start = as.integer(10 ^ log_bin),
+         bin_end = lead(bin_start)) %>% 
+      mutate(bin_end = ifelse(is.na(bin_end), Inf, bin_end)) %>% 
+      mutate(bin_name = paste0(bin_start, '-', bin_end)) %>% 
+      filter(log_bin == current_log_bin) %>% 
+      sample_frac(size = 0.05, replace = TRUE)
+    
+    out <- sum(sampled_rows$rho_vals) / sum(sampled_rows$rho_count)
+    
+    return(out)
+  })
+  
+  message(paste('Completed sampling for bin', 10^current_log_bin))
+  boot_obj <- na.omit(boot_obj)
+  
+  conf_df <- broom::tidy(t.test(boot_obj, alternative = 'two.sided', mu = 0, conf.level = 0.95)) %>% 
+    select(estimate, p.value, conf.low, conf.high) %>% 
+    mutate(bin_start = as.integer(10 ^ current_log_bin), type = data_type)
+  return(conf_df)
+}
+
+boot_fxn(d, 1000, 2, 'tract')
+```
+
+Redoing for all categories:
+
+```{r}
+d_cis <- c(0:4) %>% 
+  map_dfr(~ boot_fxn(d, 100, ., 'tract'))
+
+flank_2kb_cis <- c(0:4) %>% 
+  map_dfr(~ boot_fxn(
+    flank_2kb %>% 
+      mutate(rho_vals = rho_vals - (left_vals + right_vals),
+      rho_count = rho_count - (left_count + right_count)),
+    100, ., 'flank'
+  ))
+
+non_flank_2kb_cis <- c(3, 4) %>% 
+  map_dfr(~ boot_fxn(non_flank_2kb, 100, ., 'non-flank'))
+```
+
+Writing CIs to files (since this takes a few minutes):
+
+```{r}
+write_csv(d_cis, here('data/correlates/d_cis.csv'))
+write_csv(flank_2kb_cis, here('data/correlates/flank_2kb_cis.csv'))
+write_csv(non_flank_2kb_cis, here('data/correlates/non_flank_2kb_cis.csv'))
+```
+
+Plotting:
+
+```{r}
+d_cis <- read_csv(here('data/correlates/d_cis.csv'), col_types = cols())
+flank_2kb_cis <- read_csv(here('data/correlates/flank_2kb_cis.csv'), col_types = cols())
+non_flank_2kb_cis <- read_csv(here('data/correlates/non_flank_2kb_cis.csv'), col_types = cols())
+
+cis_all <- bind_rows(d_cis, flank_2kb_cis, non_flank_2kb_cis)
+
+tracts_all_cis <- left_join(tracts_all, cis_all, by = c('bin_start', 'type'))
+```
+
+
+```{r}
+tracts_all_cis %>% 
+  ggplot(aes(x = bin_name, y = mean_rho, fill = type)) +
+  geom_bar(stat = 'identity', position = 'dodge') +
+  geom_errorbar(
+    aes(ymin = conf.low, 
+        ymax = conf.high),
+    width = 0.4, position = position_dodge(width = 0.9)) +
+  theme_bw() +
+  labs(
+    x = 'Tract size (bp)',
+    y = expression(paste(rho))
+  ) +
+  geom_hline(yintercept = 0.004086864, linetype = 'dashed') # genomewide mean
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

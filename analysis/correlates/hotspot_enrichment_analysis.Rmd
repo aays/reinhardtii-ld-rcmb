@@ -88,17 +88,14 @@ Over all correlates:
 
 
 ```{r}
-
 correlates <- as.list(annot_genome$correlate)
 names(correlates) <- annot_genome$correlate
 
 correlates %>% 
-  map_dfr(~ calculate_enrichment(annot_genome, .) %>% 
-        broom::tidy(), 
-        .id = 'correlate'
+  map_dfr(~ 
+    calculate_enrichment(annot_genome, .) %>% 
+    broom::tidy(), .id = 'correlate'
   )
-
-
 ```
 
 ## Percent of hotspots contained in annotations
@@ -107,10 +104,9 @@ correlates %>%
 annot_genome %>% 
   mutate(prop_hotspots = hotspot_count / sum(hotspot_count),
          prop_total = total_count / sum(total_count)) %>% 
-  filter(correlate %in% c('upstream', 'downstream', 'both')) %>% 
+  filter(correlate %in% c('upstream')) %>% 
   summarise_at(vars(contains('prop')), sum)
 ```
 
-17.5% of hotspots are in the 8.8% of sequence corresponding to these annotations.
 
 

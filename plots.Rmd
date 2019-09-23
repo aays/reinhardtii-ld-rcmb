@@ -170,59 +170,97 @@ fig_2_theme <- function(font_size) {
     axis.title = element_text(family = 'Helvetica', colour = 'black', size = font_size),
     axis.line = element_line(colour = 'black', linetype = 'solid', size = 0.7),
     axis.ticks.x = element_blank(),
-    axis.ticks.y = element_line(size = 1),
-    axis.text.x = element_text(family = 'Helvetica', size = font_size,
-                               colour = 'black', angle = 45, hjust = 1),
-    axis.text.y = element_text(family = 'Helvetica', colour = 'black', size = font_size),
+    axis.ticks.y = element_line(size = 0.7, color = 'black'),
+    axis.text = element_text(family = 'Helvetica', colour = 'black', size = font_size),
+    plot.tag = element_text(color = 'black', size = font_size, face = 'bold'),
     panel.grid = element_blank(), panel.background = element_blank()
   )
 }
-
-corr_cols <- c(
-  'intergenic' = 'light blue', 'upstream' = 'light blue', 'utr3' = 'dodger blue', 
-  'in_CDS' = 'dodger blue', 'intronic' = 'dodger blue', 'utr5' = 'dodger blue', 
-  'downstream' = 'light blue', 'both' = 'light blue'
-)
 ```
 
 Load in data:
 
 ```{r}
 correlates <- read_csv('data/correlates/correlates_avg.csv', col_types = cols())
+cis_tracts <- read_csv('data/correlates/cis_all_new.csv', col_types = cols())
 ```
 
 Plot:
 
 ```{r}
-fig_2 <- correlates %>% 
+fig_2a <- correlates %>% 
   ggplot(aes(x = annotation, y = avg, fill = annotation)) +
-  geom_bar(stat = 'identity', color = 'black', size = 0.7) +
+  geom_bar(stat = 'identity', color = 'black', size = 0.7, fill = 'light grey') +
   geom_errorbar(
     aes(ymin = conf.low, ymax = conf.high),
-    width = 0.2, colour = 'black', size = 0.7) +
+    width = 0.4, colour = 'black') +
   geom_hline(
     aes(yintercept = mean(dist_2k$block_rate, na.rm = TRUE)),
     linetype = 'dashed', size = 1) +
   labs(
-    x = '',
-    y = expression(paste('mean ', rho, ' (1/bp)'))
+    x = 'annotation',
+    y = expression(paste('mean ', rho, ' (1/bp)')),
+    tag = 'A'
   ) +
-  scale_fill_manual(values = corr_cols) +
   scale_x_discrete(
     labels = c('utr3' = "3' UTR", 'utr5' = "5' UTR", 'in_CDS' = 'CDS'),
-    limits = c('intergenic', 'upstream', 'utr5', 'in_CDS', 'intronic', 'utr3', 'downstream', 'both')
+    limits = c('utr5', 'in_CDS', 'intronic', 'utr3')
   ) +
   scale_y_continuous(
     expand = c(0, 0),
-    breaks = seq(0, 0.006, 0.001),
-    labels = seq(0, 0.006, 0.001)
+    breaks = seq(0, 0.008, 0.002)
   ) +
   guides(fill = FALSE) +
-  fig_2_theme(16)
+  ld_paper_theme(16) +
+  theme(axis.text.x = element_text(family = 'Helvetica', size = 14, 
+                                   colour = 'black', angle = 45, hjust = 1)) +
+  coord_cartesian(y = c(0, 0.009))
+  # scale_fill_viridis_d(begin = 0.8, end = 0.8)
   
-fig_2
+fig_2a
 
-# ggsave('plots/fig_2.pdf', plot = fig_2, width = din1, height = din1)
+fig_2b <- cis_tracts %>% 
+  mutate(type = ifelse(type == 'tract', 'flank', type)) %>% 
+  mutate(type = case_when(
+    type == 'flank' ~ 'gene proximal',
+    type == 'non-flank' ~ 'intergenic',
+    type == 'utr5' ~ "5' UTR"
+  )) %>% 
+  ggplot(aes(x = bin, y = mean_rho, 
+             fill = forcats::fct_relevel(type, c('intergenic', 'gene proximal', "5' UTR")))) +
+  geom_bar(stat = 'identity', position = 'dodge', color = 'black') +
+  geom_errorbar(
+    width = 0.4, position = position_dodge(width = 0.9),
+    aes(ymin = conf.low, ymax = conf.high)) +
+  scale_x_discrete(
+    limits = c('short', 'long'),
+    labels = c('<2', '>2')) +
+  labs(
+    x = 'tract length (kbp)',
+    y = expression(paste('mean ', rho, ' (1/bp)')),
+    tag = 'B'
+  ) +
+  ld_paper_theme(16) +
+  guides(fill = guide_legend(title = '')) +
+  geom_hline(
+    aes(yintercept = mean(dist_2k$block_rate, na.rm = TRUE)),
+    linetype = 'dashed', size = 1) +
+  scale_color_viridis_d(aesthetics = 'fill', name = 'type', begin = 0.4, end = 1) +
+  scale_y_continuous(
+    expand = c(0, 0),
+    breaks = seq(0, 0.008, 0.002)) +
+  coord_cartesian(y = c(0, 0.009)) +
+  theme(axis.text.x = element_text(
+    family = 'Helvetica', size = 16, colour = 'black'),
+    axis.title.y = element_blank(), axis.text.y = element_blank()) +
+  legend_theme(12)
+
+fig_2b
+
+fig_2 <- fig_2a + fig_2b +
+  plot_layout(ncol = 2)
+
+# ggsave('plots/fig_2.pdf', plot = fig_2, width = din1 * 1.5, height = din1 * 0.7)
 ```
 
 ## Figure 3 - Recombination and nucleotide diversity
@@ -303,7 +341,7 @@ fig_3b <- pi_density %>%
     labels = c(expression(10^1), expression(10^1.5), expression(10^2))
   ) +
   annotate('text', x = 1.15, y = 0.05, size = 5.5,
-           label = 'italic(R) ^ 2 == "0.313***"', parse = TRUE)
+           label = 'italic(R) ^ 2 == "0.313**"', parse = TRUE)
 
 fig_3b
 ```
@@ -352,6 +390,36 @@ fig_s3
 # ggsave('plots/fig_s3.pdf', plot = fig_s3, width = din1 * 0.75, height = din1 * 0.75)
 ```
 
+## Fig. S4 - Intergenic tract length distribution
+
+```{r}
+intergenic_tracts <- here('data/correlates/intergenic_tract_rho.tsv') %>% 
+  read_tsv(col_types = cols()) %>% 
+  filter(tract_size > 0)
+```
+
+Plot:
+
+```{r}
+fig_s4 <- intergenic_tracts %>% 
+  ggplot(aes(x = log10(tract_size))) +
+  stat_ecdf() +
+  ld_paper_theme(16) +
+  labs(
+    x = 'tract size (bp)',
+    y = 'proportion'
+  ) +
+  scale_x_continuous(
+    breaks = c(0:5),
+    labels = c(expression(10^0), expression(10^1), expression(10^2),
+               expression(10^3), expression(10^4), expression(10^5))
+  ) +
+  geom_vline(xintercept = log10(2000), linetype = 'dashed')
+
+fig_s4
+
+ggsave('plots/fig_s4.pdf', plot = fig_s4, width = din1 * 0.75, height = din1 * 0.5)
+```
 
 
 
