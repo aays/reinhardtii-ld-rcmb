@@ -118,7 +118,7 @@ utr_boot_fxn <- function(d, rep_count, tract_type) {
     
     sampled_rows <- d %>% 
       filter(bin == tract_type) %>% 
-      sample_frac(size = 0.05, replace = TRUE)
+      sample_frac(size = 1, replace = TRUE)
     
     out <- sum(sampled_rows$utr_rho_vals) / sum(sampled_rows$utr_rho_count)
     return(out)
@@ -225,7 +225,7 @@ tract_boot_fxn <- function(d, rep_count, tract_type) {
     
     sampled_rows <- d %>% 
       filter(bin == tract_type) %>% 
-      sample_frac(size = 0.05, replace = TRUE)
+      sample_frac(size = 1, replace = TRUE)
     
     out <- sum(sampled_rows$rho_vals) / sum(sampled_rows$rho_count)
     return(out)
