@@ -528,5 +528,102 @@ time python3.5 analysis/correlates/intergenic_tract_proximal.py \
 --outfile data/correlates/intergenic_flanks_500.tsv
 ```
 
+## 12/9/2019
+
+100 bp flanks:
+
+```bash
+time python3.5 analysis/correlates/intergenic_tract_proximal.py \
+--fname data/correlates/intergenic_tract_rho.tsv \
+--table data/correlates/annotation_table_rho.txt.gz \
+--windowsize 100 \
+--outfile data/correlates/intergenic_flanks_100.tsv
+```
+
+## 29/11/2019
+
+post-review - need to account for SNP density in comparing
+rho between annotations (ie CDS vs intron, genic vs intergenic)
+
+re-orienting myself - got chromosomal VCFs in `data/references/vcf/filtered`
+and LDhelmet 2 kb window files in `data/ldhelmet/block_100`
+
+need to write a script that takes in a vcf + summarised ldhelmet outfile
+as input and computes SNP density for each window before adding it on as a separate column
+
+first pass:
+
+```bash
+time python3.5 analysis/correlates/snp_density.py \
+--filename data/ldhelmet/block_100/chromosome_15_summarised.txt \
+--vcf data/references/vcf/filtered/chromosome_15.vcf.gz \
+--chrom chromosome_15 \
+--outfile data/ldhelmet/block_100/chromosome_15_density.txt
+```
+
+looks good - now over the genome:
+
+```bash
+for i in {1..14} 16 17; do
+    time python3.5 analysis/correlates/snp_density.py \
+    --filename data/ldhelmet/block_100/chromosome_${i}_summarised.txt \
+    --vcf data/references/vcf/filtered/chromosome_${i}.vcf.gz \
+    --chrom chromosome_${i} \
+    --outfile data/ldhelmet/block_100/chromosome_${i}_density.txt;
+done
+```
+
+## 4/12/2019
+
+
+alright, now to fit a model with annotation and polymorphism (ie `rcmb_rate ~
+percent_CDS + polymorphism`)
+
+though I think this will be most easily done if the above script is further
+modified to add in # intergenic/genic/CDS/intron sites as separate columns
+
+the count column lookup is as follows:
+
+```
+i: intergenic
+c: cds
+n: intron
+5: utr5
+3: utr3
+N: unknown
+```
+
+running the script on chr 15 as a test:
+
+```bash
+time python3.5 analysis/correlates/snp_density.py \
+--filename data/ldhelmet/block_100/chromosome_15_summarised.txt \
+--vcf data/references/vcf/filtered/chromosome_15.vcf.gz \
+--chrom chromosome_15 \
+--table data/correlates/annotation_table_rho.txt.gz \
+--outfile data/ldhelmet/block_100/chromosome_15_density.txt
+```
+
+this script also now saves the lookup as `chromosome_i_temp_lookup` so that it
+can be provided on subsequent runs and doesn't have to be recreated every single time
+
+running on all other chromosomes (running in parallel bugged out for some reason...)
+
+```bash
+time for i in {1..14} 16 17; do
+    time python3.5 analysis/correlates/snp_density.py \
+    --filename data/ldhelmet/block_100/chromosome_${i}_summarised.txt \
+    --vcf data/references/vcf/filtered/chromosome_${i}.vcf.gz \
+    --chrom chromosome_${i} \
+    --table data/correlates/annotation_table_rho.txt.gz \
+    --outfile data/ldhelmet/block_100/chromosome_${i}_density.txt;
+done
+```
+
+## 5/12/2019
+
+loop above took 1h 30min, but looks like it was successful
+
+having a look at this in `correlates_analysis.Rmd`
 
 
