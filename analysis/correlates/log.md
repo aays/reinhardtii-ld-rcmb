@@ -626,4 +626,38 @@ loop above took 1h 30min, but looks like it was successful
 
 having a look at this in `correlates_analysis.Rmd`
 
+update - I don't think this approach is the way to go - it offers some insight
+into genic vs intergenic per 2 kb window, but we're working with rho averages/window
+
+a better thing to do would be to use the lookup strings in `data/annotation_lookup`
+and create a dataset that shows 'tracts' of annotations, looking something like this:
+
+```
+chr start end rho_sum rho_count rho_tract snp_count is_intergenic is_CDS is_intronic ...
+chromosome_1 1000 4500 7 3500 0.002 60 1 0 0 ...
+```
+
+bc then that way we can fit rho_window ~ snp_density + is_CDS with is_CDS encoded as
+a categorical variable, and then see how much is_CDS:1 affects rho_window
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
