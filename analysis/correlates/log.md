@@ -637,9 +637,43 @@ chr start end rho_sum rho_count rho_tract snp_count is_intergenic is_CDS is_intr
 chromosome_1 1000 4500 7 3500 0.002 60 1 0 0 ...
 ```
 
-bc then that way we can fit rho_window ~ snp_density + is_CDS with is_CDS encoded as
-a categorical variable, and then see how much is_CDS:1 affects rho_window
+bc then that way we can fit `rho_window ~ snp_density + is_CDS` with `is_CDS` encoded as
+a categorical variable, and then see how much `is_CDS:1` affects `rho_window`
 
+## 8/12/2019
+
+renaming all the lookups that were created by `snp_density.py`
+
+```bash
+for i in {1..17}; do
+    mv -v data/annotation_lookups/chromosome_${i}_temp_lookup data/annotation_lookups/chromosome_${i}.txt;
+done
+```
+
+alright, first pass at script is done - here goes:
+
+```bash
+time python3.5 analysis/correlates/annotation_tracts.py \
+--filename data/annotation_lookups/chromosome_15.txt \
+--table data/correlates/annotation_table_rho.txt.gz \
+--vcf data/references/vcf/filtered/chromosome_15.vcf.gz \
+--chrom chromosome_15 \
+--out data/correlates/annotation_tracts/chromosome_15.txt
+```
+
+worked cleanly and was done in two minutes! sometimes I write good code! 
+
+```bash
+for i in {1..14} 16 17; do
+    time python3.5 analysis/correlates/annotation_tracts.py \
+    --filename data/annotation_lookups/chromosome_${i}.txt \
+    --table data/correlates/annotation_table_rho.txt.gz \
+    --vcf data/references/vcf/filtered/chromosome_${i}.vcf.gz \
+    --chrom chromosome_${i} \
+    --out data/correlates/annotation_tracts/chromosome_${i}.txt;
+    sleep 1;
+done
+```
 
 
 
