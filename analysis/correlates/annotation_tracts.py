@@ -73,6 +73,8 @@ def create_output_line(table, vcf, chrom, tract_start, tract_end,
             out_dict[lookup[k]] = 1
     if current_annotation != 'i':
         out_dict['is_genic'] = 1
+    elif current_annotation == 'i':
+        out_dict['is_genic'] = 0
     return out_dict
 
 
