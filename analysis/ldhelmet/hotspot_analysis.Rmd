@@ -17,14 +17,10 @@ Summary stats:
 
 Will be using the block = 5 files for this (given simulation results)
 
-```{r setup, include=FALSE}
-require(knitr)
-knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
-```
-
 ```{r}
 library(tidyverse)
 library(fs)
+library(here)
 ```
 
 ## Data prep
@@ -38,7 +34,7 @@ non_overlapping <- function(d, windowsize) {
   return(d)
 }
 
-fnames <- dir_ls('data/ldhelmet/block_5/', regexp = 'chromosome_[0-9]+_summarised\\.txt')
+fnames <- dir_ls(here('data/ldhelmet/block_10/'), regexp = 'chromosome_[0-9]+_summarised\\.txt')
 hotspots <- map(fnames, read_csv, col_types = cols()) %>% 
   map_dfr(~ filter(., rate_ratio >= 5))
 
@@ -110,7 +106,7 @@ Summary stats:
 hotspot_counts <- hotspot_groups %>% 
   map_dfr(~ summarise(., n = max(hotspot_group)), .id = 'name')
 
-sum(hotspot_counts$n) # 1018
+sum(hotspot_counts$n) # 875
 ```
 
 ### Mean hotspot length
@@ -123,7 +119,7 @@ hotspot_groups %>%
       mutate(length = end - start),
     .id = 'name'
   ) %>% 
-  summarise(mean_length = mean(length)) # 3298 bp
+  summarise(mean_length = mean(length)) # 3428 bp
 ```
 
 ### Amount of sequence in hotspots
@@ -151,7 +147,7 @@ hotspot_sequence <- hotspot_groups %>%
   summarise(total = sum(length)) %>% 
   unlist()
 
-hotspot_sequence / genome_length # 0.0307
+hotspot_sequence / genome_length # 0.0275
 ```
 
 ### Mean rho + fold increase over local background
@@ -188,6 +184,6 @@ hotspot_distances <- hotspot_groups %>%
   )
 
 hotspot_distances %>% 
-  summarise(mean_distance = mean(distance, na.rm = TRUE)) # 104.73 kb
+  summarise(mean_distance = mean(distance, na.rm = TRUE)) # 122.05 kb
 ```
 

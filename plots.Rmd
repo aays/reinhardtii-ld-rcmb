@@ -181,7 +181,16 @@ fig_2_theme <- function(font_size) {
 Load in data:
 
 ```{r}
-correlates <- read_csv('data/correlates/correlates_avg.csv', col_types = cols())
+cis_new <- read_csv('data/correlates/cis_all_corrected.csv') %>% 
+  select(annotation, measure, val) %>% 
+  spread(measure, val) %>% 
+  mutate(annotation = str_replace(annotation, 'is_', '')) %>% 
+  select(-avg)
+
+correlates <- read_csv('data/correlates/correlates_avg.csv', col_types = cols()) %>% 
+  select(type, annotation, count, total, avg) %>% 
+  left_join(cis_new, by = c('annotation'))
+      
 cis_tracts <- read_csv('data/correlates/cis_all_new.csv', col_types = cols())
 ```
 
@@ -356,7 +365,7 @@ fig_3
 # ggsave('plots/fig_3.pdf', plot = fig_3, width = din1 * 1.25, height = din1 * 0.6)
 ```
 
-## Fig. S3 - Rho and chromosome length
+## Fig. S4 - Rho and chromosome length
 
 Data has been read in already (see Fig. 1)
 
@@ -372,7 +381,7 @@ lm(mean_rho ~ length, data = rho_lengths) %>%
 
 
 ```{r}
-fig_s3 <- rho_lengths %>% 
+fig_s4 <- rho_lengths %>% 
   mutate(length_mb = length / 1e6) %>% 
   ggplot(aes(x = length_mb, y = mean_rho)) +
   geom_point(size = 1.4) +
@@ -385,12 +394,12 @@ fig_s3 <- rho_lengths %>%
   annotate('text', x = 8.45, y = 0.009, size = 5.5,
            label = 'italic(R) ^ 2 == "0.365*"', parse = TRUE)
 
-fig_s3
+fig_s4
 
-# ggsave('plots/fig_s3.pdf', plot = fig_s3, width = din1 * 0.75, height = din1 * 0.75)
+# ggsave('plots/fig_s4.pdf', plot = fig_s4, width = din1 * 0.75, height = din1 * 0.75)
 ```
 
-## Fig. S4 - Intergenic tract length distribution
+## Fig. S5 - Intergenic tract length distribution
 
 ```{r}
 intergenic_tracts <- here('data/correlates/intergenic_tract_rho.tsv') %>% 
@@ -401,7 +410,7 @@ intergenic_tracts <- here('data/correlates/intergenic_tract_rho.tsv') %>%
 Plot:
 
 ```{r}
-fig_s4 <- intergenic_tracts %>% 
+fig_s5 <- intergenic_tracts %>% 
   ggplot(aes(x = log10(tract_size))) +
   stat_ecdf() +
   ld_paper_theme(16) +
@@ -416,9 +425,9 @@ fig_s4 <- intergenic_tracts %>%
   ) +
   geom_vline(xintercept = log10(2000), linetype = 'dashed')
 
-fig_s4
+fig_s5
 
-ggsave('plots/fig_s4.pdf', plot = fig_s4, width = din1 * 0.75, height = din1 * 0.5)
+ggsave('plots/fig_s5.pdf', plot = fig_s5, width = din1 * 0.75, height = din1 * 0.5)
 ```
 
 

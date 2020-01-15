@@ -201,7 +201,7 @@ boot_fxn <- function(df, colname, rep_count) {
     
     obj <- df %>%
         select(contains(paste0(colname, '_'))) %>%
-        sample_frac(size = 0.05, replace = TRUE)
+        sample_frac(size = 1, replace = TRUE)
     
     colname_total <- paste0(colname, '_total')
     colname_count <- paste0(colname, '_count')
@@ -310,14 +310,44 @@ density_files %>%
   filter(is.finite(log_snp_density), is.finite(log_rho_tract)) %>% 
   split(.$chrom) %>% 
   map_dfr(~ tidy(lm(log_rho_tract ~ log_snp_density, data = .)), .id = 'chrom') %>% 
-  filter(term != '(Intercept)')
+  filter(term != '(Intercept)') %>% 
+  summary(.$estimate)
 
-density_files %>% 
+# fig s3
+chrom_levels <- sapply(1:17, function(x) paste0('chromosome_', x))
+fig_s3 <- density_files %>% 
+  mutate(chrom = factor(chrom, levels = chrom_levels)) %>% 
   ggplot(aes(x = log10(snp_density), y = log10(rho_tract))) +
-  geom_point(alpha = 0.2) +
+  geom_point(alpha = 0.2, size = 0.4) +
   geom_smooth(method = 'lm') +
   facet_wrap(~ chrom) +
-  theme_classic()
+  theme_classic() +
+  labs(
+    x = 'SNP density',
+    y = 'Recombination rate'
+  ) +
+  scale_x_continuous(
+    breaks = seq(-4, 0, 1),
+    labels = c(
+      expression(10^-4), expression(10^-3),
+      expression(10^-2), expression(10^-1), 1
+    )
+  ) +
+  scale_y_continuous(
+    breaks = c(-6, -4, -2, 0),
+    labels = c(
+      expression(10^-6), expression(10^-4), expression(10^-2), 1
+    )) +
+  theme(
+    axis.text = element_text(size = 8, family = "Helvetica"),
+    strip.text = element_text(size = 8, family = 'Helvetica')
+  )
+
+din1 <- 6.34375
+din2 <- 3.385417
+
+# ggsave(here('plots/fig_s3.pdf'), plot = fig_s3,
+#        width = din1 * 1.25, height = din2 * 1.25)
 ```
 
 ### Genic RR vs Intergenic RR
@@ -327,7 +357,7 @@ density_files %>%
 density_files %>% 
   filter(is.finite(log_rho_tract), is.finite(log_snp_density)) %>% 
   mutate(is_genic = as.factor(is_genic)) %>% # encode is_genic as factor
-  lm(log_rho_tract ~ log_snp_density + is_genic, data = .) %>% 
+  lm(log_rho_tract ~ log_snp_density * is_genic, data = .) %>% 
   summary()
 
 # both predictors significant, and sign of betas positive
@@ -338,7 +368,7 @@ density_files %>%
   filter(is.finite(log_rho_tract), is.finite(log_snp_density)) %>% 
   mutate(is_genic = as.factor(is_genic)) %>% 
   split(.$chrom) %>% 
-  map_dfr(~ broom::tidy(lm(log_rho_tract ~ log_snp_density + is_genic, data = .)), .id = 'chrom') %>% 
+  map_dfr(~ broom::tidy(lm(log_rho_tract ~ log_snp_density * is_genic, data = .)), .id = 'chrom') %>% 
   filter(term != '(Intercept)') # chr15 is the one outlier, with beta = -0.043
 ```
 
@@ -350,17 +380,129 @@ density_files %>%
   filter(is_in_CDS == 1 | is_intronic == 1) %>% # only consider CDS and intron tracts
   filter(is.finite(log_rho_tract), is.finite(log_snp_density)) %>% 
   mutate(is_in_CDS = as.factor(is_in_CDS)) %>% 
-  lm(log_rho_tract ~ log_snp_density + is_in_CDS, data = .) %>% 
-  summary() # beta = 0.226 for is_in_CDS:1
+  lm(log_rho_tract ~ log_snp_density * is_in_CDS, data = .) %>% 
+  summary() # beta = 0.309 for is_in_CDS:1
 
 # chromosomal
 density_files %>% 
   filter(is.finite(log_rho_tract), is.finite(log_snp_density)) %>% 
   mutate(is_in_CDS = as.factor(is_in_CDS)) %>% 
   split(.$chrom) %>% 
-  map_dfr(~ broom::tidy(lm(log_rho_tract ~ log_snp_density + is_in_CDS, data = .)), .id = 'chrom') %>% 
+  map_dfr(~ broom::tidy(lm(log_rho_tract ~ log_snp_density * is_in_CDS, data = .)), .id = 'chrom') %>% 
   filter(term != '(Intercept)') # pattern holds in all chromosomes
 ```
+
+## Intergenic tracts
+
+```{r}
+intergenic_tracts <- read_tsv(here('data/correlates/intergenic_tract_rho.tsv'), col_types = cols())
+intergenic_tracts_proximal <- read_tsv(here('data/correlates/intergenic_flanks_2kb_right_snps.tsv'), col_types = cols()) %>% 
+  left_join(intergenic_tracts, by = c('chrom', 'start', 'end')) %>% 
+  select(-tract_size.y) %>% 
+  rename(tract_size = tract_size.x) %>% 
+  mutate(bin = ifelse(tract_size <= 2000, 'short', 'long')) %>% 
+  mutate(snp_density = snp_count / tract_size)
+```
+
+### Long (>2 kb) tracts vs short (<2 kb) tracts
+
+```{r}
+intergenic_tracts_proximal %>% 
+  mutate(log_rho_window = log10(rho_window), log_snp_density = log10(snp_density)) %>% 
+  filter(is.finite(log_rho_window), is.finite(log_snp_density)) %>% 
+  lm(log_rho_window ~ log_snp_density + bin, data = .) %>% 
+  summary() # both preds significant, beta = -0.239 if bin is short
+# interaction nonsignificant - removing it makes bin significant
+```
+
+### 'Ends' of long tracts (2 kb region upstream of genes) vs short tracts
+
+```{r}
+intergenic_tracts_proximal %>% 
+  mutate(bin = case_when(tract_size <= 2000 ~ 'short', tract_size > 2000 ~ 'long')) %>% 
+  mutate(rho_window = ifelse(bin == 'long', right_window, rho_window), # get right window stats if long tract
+         snp_density = case_when(
+           bin == 'long' ~ right_snp_density,
+           bin == 'short' ~ (left_snp_count + right_snp_count) / tract_size)) %>% 
+  mutate(log_rho_window = log10(rho_window), log_snp_density = log10(snp_density)) %>% 
+  filter(is.finite(log_rho_window), is.finite(log_snp_density)) %>% 
+  lm(log_rho_window ~ log_snp_density + bin, data = .) %>% 
+  summary() 
+# interaction is nonsignificant, and makes bin nonsignificant
+# w/o interaction - bin:short = -0.13435
+  
+```
+
+### 'Start' of long tracts (2 kb downstream of genes) vs short tracts
+
+```{r}
+intergenic_tracts_proximal_left <- read_tsv(here('data/correlates/intergenic_flanks_2kb_left_snps.tsv'), col_types = cols()) %>% 
+  left_join(intergenic_tracts, by = c('chrom', 'start', 'end')) %>% 
+  select(-tract_size.y) %>% 
+  rename(tract_size = tract_size.x) %>% 
+  mutate(bin = ifelse(tract_size <= 2000, 'short', 'long')) %>% 
+  mutate(snp_density = snp_count / tract_size)
+
+intergenic_tracts_proximal_left %>% 
+  mutate(bin = case_when(tract_size <= 2000 ~ 'short', tract_size > 2000 ~ 'long')) %>% 
+  mutate(rho_window = ifelse(bin == 'long', left_window, rho_window), # get right window stats if long tract
+         snp_density = case_when(
+           bin == 'long' ~ left_snp_density,
+           bin == 'short' ~ (left_snp_count + right_snp_count) / tract_size)) %>% 
+  mutate(log_rho_window = log10(rho_window), log_snp_density = log10(snp_density)) %>% 
+  filter(is.finite(log_rho_window), is.finite(log_snp_density)) %>% 
+  lm(log_rho_window ~ log_snp_density + bin, data = .) %>% 
+  summary() 
+# beta for binshort is -0.1612
+# interaction is nonsignificant and makes bin also nonsignificant
+
+```
+
+
+### 'Ends' of long tracts vs remainder of long tracts
+
+```{r}
+intergenic_tracts_proximal %>% 
+  filter(tract_size > 2000) %>% 
+  mutate(center_rho_vals = rho_vals - right_vals,
+         center_rho_count = rho_count - right_count,
+         center_rho_window = center_rho_vals / center_rho_count,
+         center_rho_snp_count = snp_count - right_snp_count,
+         center_rho_snp_density = center_rho_snp_count / (tract_size - 2000)) %>% 
+  select(chrom, start, end, right_window, center_rho_window, right_snp_density, center_rho_snp_density) %>% 
+  gather(measure, value, -chrom, -start, -end, -contains('snp_density')) %>% 
+  mutate(snp_density = ifelse(measure == 'right_window', right_snp_density, center_rho_snp_density)) %>% 
+  mutate(log_rho_window = log10(value), log_snp_density = log10(snp_density)) %>% 
+  filter(is.finite(log_rho_window), is.finite(log_snp_density)) %>% 
+  lm(log_rho_window ~ log_snp_density + measure, data = .) %>% 
+  summary() # nonsignificant, with or without interaction
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
