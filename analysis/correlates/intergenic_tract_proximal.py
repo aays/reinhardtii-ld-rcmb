@@ -1,6 +1,13 @@
 '''
 intergenic_tract_proximal.py - get rho at
 gene proximal sites in intergenic tracts
+
+--split - if selected 'right', will always return
+'right' 2 kb even if tracts are 2-4 kb - same goes
+for if 'left' is selected
+
+default behaviour otherwise is to split the tracts in
+half, making 'left' and 'right' < 2 kb each
 '''
 
 import argparse
@@ -19,15 +26,17 @@ def args():
                         type=str, help='Annotation table (txt.gz)')
     parser.add_argument('-w', '--windowsize', required=True,
                         type=int, help='Window considered gene proximal')
+    parser.add_argument('-s', '--split', required=False,
+                        type=str, help='Split tracts left/right? (See docs)')
     parser.add_argument('-o', '--outfile', required=True,
                         type=str, help='File to write to')
 
     args = parser.parse_args()
 
-    return args.fname, args.table, args.windowsize, args.outfile
+    return args.fname, args.table, args.windowsize, args.split, args.outfile
 
-def gene_proximal_per_tract(line, table, windowsize):
-    ''' (str, str, int) -> list?
+def gene_proximal_per_tract(line, table, windowsize, split):
+    ''' (str, str, int, str) -> list?
     takes in a single input tract 'line' from tsv
     and calculates rho at gene proximal sites
 
@@ -41,8 +50,19 @@ def gene_proximal_per_tract(line, table, windowsize):
     if tract_size > (2 * windowsize):
         left_start, left_end = start, start + windowsize
         right_start, right_end = end - windowsize, end
-    elif tract_size <= (2 * windowsize):
-        # if tract length < 2*windowsize, split into half for 'left' + 'right'
+    elif tract_size <= (2 * windowsize) and tract_size > windowsize:
+        if not split:
+            # split into half for 'left' + 'right'
+            left_start, left_end = start, start + (tract_size / 2)
+            right_start, right_end = start + (tract_size / 2), end
+        elif split == 'left':
+            left_start, left_end = start, start + 2000
+            right_start, right_end = left_end, end
+        elif split == 'right':
+            right_start, right_end = end - 2000, end
+            left_start, left_end = start, right_start
+    elif tract_size < (2 * windowsize): # do split thing again
+        # downstream script can add rho vals and count for full tract
         left_start, left_end = start, start + (tract_size / 2)
         right_start, right_end = start + (tract_size / 2), end
     left_vals, right_vals = 0.0, 0.0
@@ -59,7 +79,7 @@ def gene_proximal_per_tract(line, table, windowsize):
     return left_vals, left_count, right_vals, right_count, tract_size
 
 
-def parse_tracts(fname, table, windowsize, outfile):
+def parse_tracts(fname, table, windowsize, split, outfile):
     ''' (str, str, int, str) -> None
     iterates through input tract file and uses gene_proximal_per_tract
     to calculate rho in 'left gene proximal' and 'right gene proximal' regions
@@ -76,7 +96,8 @@ def parse_tracts(fname, table, windowsize, outfile):
                 tract_size = int(line['tract_size'])
                 if tract_size > 1:
                     left_vals, left_count, right_vals, \
-                        right_count, tract_size = gene_proximal_per_tract(line, table, windowsize)
+                        right_count, tract_size = gene_proximal_per_tract(line,
+                                table, windowsize, split)
                     writer.writerow(
                         {'chrom': line['chrom'], 'start': line['start'],
                          'end': line['end'], 'tract_size': tract_size,
@@ -88,8 +109,8 @@ def parse_tracts(fname, table, windowsize, outfile):
                         )
 
 def main():
-    fname, table, windowsize, outfile = args()
-    parse_tracts(fname, table, windowsize, outfile)
+    fname, table, windowsize, split, outfile = args()
+    parse_tracts(fname, table, windowsize, split, outfile)
 
 if __name__ == '__main__':
     main()
