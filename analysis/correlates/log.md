@@ -675,6 +675,326 @@ for i in {1..14} 16 17; do
 done
 ```
 
+## 13/12/2019
+
+redoing the bootstrapping stuff on the server (since it's going to take a while)
+
+creating a new hardcoded script called `intergenic_tract_boot.R` to do
+this which lifts from `intergenic_tract_analysis.Rmd`
+
+## 16/12/2019
+
+ended up doing this in the console bc the script broke
+due to some bizarre rounding error 
+
+took a while:
+
+```R
+> utr3_cis <- c('short', 'long') %>%
++   map_dfr(~ utr_boot_fxn(
++     rename(
++       utr3_tracts, utr_rho_vals = utr3_rho_vals, utr_rho_count = utr3_rho_coun+     20000, .)) %>%
++   mutate(utr = 'three_prime')
+Starting boot
+2019-12-15 17:58:35
+Generating CIs for short
+Completed sampling for short
+Done
+2019-12-15 20:57:07
+Starting boot
+2019-12-15 20:57:07
+Generating CIs for long
+Completed sampling for long
+Done
+2019-12-15 21:00:05
+> utr_cis <- bind_rows(utr5_cis, utr3_cis)
+> utr_cis
+     conf.low   conf.high   bin         utr
+1 0.002758457 0.003667423 short  five_prime
+2 0.002645785 0.004273968  long  five_prime
+3 0.003035521 0.004493206 short three_prime
+4 0.002821646 0.004234891  long three_prime
+> head(utr_bars_all)
+# A tibble: 4 x 9
+  name  bin   total_rho total_count sd_rho     n mean_rho   se_rho utr
+  <chr> <chr>     <dbl>       <dbl>  <dbl> <int>    <dbl>    <dbl> <chr>
+1 1     long      2880.      894459 0.0177  1474  0.00322 0.000462 five_prime
+2 1     short    22384.     7292922 0.0130 14792  0.00307 0.000107 five_prime
+3 2     long      5317.     1576256 0.0215  1920  0.00337 0.000491 three_prime
+4 2     short    45869.    13370248 0.0227 17282  0.00343 0.000173 three_prime
+> utr_bars_cis <- utr_bars_all %>% left_join(utr_cis, by = c('utr', 'bin'))
+> write_csv(utr_bars_cis, here('data/correlates/utr_bars_cis_corrected.csv'))
+> write_csv(utr_cis, here('data/correlates/utr_cis_only.csv'))
+```
+
+the utr cis are now in `data/correlates`
+
+repeating this for intergenic tracts
+
+## 24/12/2019
+
+need to redo the intergenic tract analysis, but with the same
+multiple regression approach used for the other correlate stuff
+
+first need to make an all chromosomes VCF (since the existing
+script works on the whole genome)
+
+```python
+# in data/references/vcf/filtered
+from cyvcf2 import VCF, Writer
+from tqdm import tqdm
+
+fnames = ['chromosome_{}.vcf.gz'.format(i) for i in range(1, 18)]
+
+vcf_in = VCF(fnames[0])
+vcf_out = Writer('all_chrom.vcf', vcf_in)
+
+for fname in fnames:
+    print(fname)
+    for record in tqdm(VCF(fname)):
+        vcf_out.write_record(record)
+```
+
+actually - what if I just used python to directly
+update the outfile from `intergenic_tract_proximal.py`?
+
+```python
+>>> tract_fname = 'data/correlates/intergenic_flanks_2kb.tsv'
+>>> from tqdm import tqdm
+>>> from cyvcf2 import VCF
+>>> import csv
+>>> with open(tract_fname, 'r', newline='') as f:
+  2     tract_lines = [line for line in csv.DictReader(f, delimiter='\t')]
+>>> tract_lines[0].keys()
+dict_keys(['left_window', 'start', 'right_vals', 'right_count', 
+'tract_size', 'chrom', 'windowsize', 'end', 'right_window', 
+'left_count', 'left_vals'])
+>>> from copy import deepcopy
+  2 with open('data/correlates/intergenic_flanks_2kb_snps.tsv', 'w') as f:
+  3     fieldnames = list(tract_lines[0].keys())
+  4     fieldnames.extend(['snp_count', 'snp_density'])
+  5     writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter = '\t')
+  6     writer.writeheader()
+  7     vcf_fname = 'data/references/vcf/filtered/all_chrom.vcf.gz'
+  8     v = VCF(vcf_fname)
+  9     for line in tqdm(tract_lines):
+ 10         chrom, start, end = line['chrom'], int(line['start']), int(line['
+    end'])
+ 11         region = '{c}:{s}-{e}'.format(c=chrom, s=start, e=end)
+ 12         snp_count = len([r for r in v.__call__(region)])
+ 13         out_dict = deepcopy(line)
+ 14         out_dict['snp_count'] = snp_count
+ 15         out_dict['snp_density'] = snp_count / (end - start)
+ 16         writer.writerow(out_dict)
+100%|█████████████████████████████████| 16192/16192 [00:31<00:00, 510.29it/s]
+```
+
+in Rmd - set bin size as a binary categorical predictor
+and regress RR ~ bin + diversity
+
+## 26/12/2019
+
+so this column is useful for full tract comparisons, but there also needs to be
+a separate column for SNP density specifically in the 'left window' and 'right window'
+of longer (>2kb) tracts
+
+for shorter tracts, report SNP density for full tract - same as before
+
+```python
+>>> tract_fname = 'data/correlates/intergenic_flanks_2kb_snps.tsv'
+>>> from tqdm import tqdm
+>>> from cyvcf2 import VCF
+>>> import csv
+>>> with open(tract_fname, 'r', newline='') as f:
+  2     tract_lines = [line for line in csv.DictReader(f, delimiter='\t')]
+>>> fieldnames = ['chrom', 'start', 'end', 'tract_size', 'windowsize', 'left_vals',
+  2 'left_count', 'left_window', 'right_vals', 'right_count', 'right_window', 'snp_count', 'snp_density']
+>>> from copy import deepcopy
+>>> with open('data/correlates/intergenic_flanks_2kb_tract_snps.tsv', 'w') as f:
+  2     fieldnames.extend(['left_snp_count', 'left_snp_density', 'right_snp_count', 'right_snp_density'])
+  3     writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter='\t')
+  4     writer.writeheader()
+  5     vcf_fname = 'data/references/vcf/filtered/all_chrom.vcf.gz'
+  6     v = VCF(vcf_fname)
+  7     for line in tqdm(tract_lines):
+  8         chrom, start, end, tract_size = line['chrom'], int(line['start']), int(line['end']), int(line['tract_size
+    '])
+  9         if tract_size > 4000:
+ 10             left_region = '{}:{}-{}'.format(chrom, start, start + 2000)
+ 11             right_region = '{}:{}-{}'.format(chrom, end - 2000, end)
+ 12         elif tract_size <= 4000:
+ 13             half_tract_size = round(tract_size / 2)
+ 14             left_region = '{}:{}-{}'.format(chrom, start, start + half_tract_size)
+ 15             right_region = '{}:{}-{}'.format(chrom, start + half_tract_size, end)
+ 16         left_snp_count = len([r for r in v.__call__(left_region)])
+ 17         right_snp_count = len([r for r in v.__call__(right_region)])
+ 18         out_dict = deepcopy(line)
+ 19         out_dict['left_snp_count'], out_dict['right_snp_count'] = left_snp_count, right_snp_count
+ 20         out_dict['left_snp_density'] = left_snp_count / 2000
+ 21         out_dict['right_snp_density'] = right_snp_count / 2000
+ 22         writer.writerow(out_dict)
+100%|█████████████████████████████████████████████████████████████████████████| 16192/16192 [00:56<00:00, 285.38it/s]
+```
+
+## 28/12/2019
+
+updating the intergenic proximal script to get full 2 kb to the 'right' in < 4 kb tracts
+instead of splitting tracts in half
+
+```bash
+time python3.5 analysis/correlates/intergenic_tract_proximal.py \
+--fname data/correlates/intergenic_tract_rho.tsv \
+--table data/correlates/annotation_table_rho.txt.gz \
+--windowsize 2000 \
+--split right \
+--outfile data/correlates/intergenic_flanks_2kb_right.tsv
+```
+
+done in 10 min like before
+
+adding SNPs using adapted python code above:
+
+(n.b. lines 20 and 21 above are wrong - count should only be divided by 2000 if
+tract length > 4 kb - not going to be using that output file anyways though)
+
+```python
+>>> tract_fname = 'data/correlates/intergenic_flanks_2kb_right.tsv'
+>>> from tqdm import tqdm; from cyvcf2 import VCF; import csv
+>>> from copy import deepcopy
+>>> with open(tract_fname, 'r', newline='') as f:
+  2     tract_lines = [line for line in csv.DictReader(f, delimiter='\t')]
+>>> fieldnames = ['chrom', 'start', 'end', 'tract_size', 'windowsize', 'left_vals', 'left_count',
+  2 'left_window', 'right_vals', 'right_count', 'right_window']
+>>> with open('data/correlates/intergenic_flanks_2kb_right_snps.tsv', 'w') as f:
+  2     fieldnames.extend(['snp_count', 'left_snp_count', 'left_snp_density',
+  3                        'right_snp_count', 'right_snp_density'])
+  4     writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter='\t')
+  5     writer.writeheader()
+  6     vcf_fname = 'data/references/vcf/filtered/all_chrom.vcf.gz'
+  7     v = VCF(vcf_fname)
+  8     for line in tqdm(tract_lines):
+  9         chrom, start, end = line['chrom'], int(line['start']), int(line['end'])
+ 10         tract_size = int(line['tract_size'])
+ 11         region_str = '{}:{}-{}'
+ 12         if tract_size > 4000:
+ 13             left_len, right_len = 2000, 2000
+ 14             left_region = region_str.format(chrom, start, start + 2000)
+ 15             right_region = region_str.format(chrom, end - 2000, end)
+ 16         elif 2000 < tract_size <= 4000:
+ 17             left_len = (end - 2000) - start
+ 18             right_len = 2000
+ 19             right_region = region_str.format(chrom, end - 2000, end)
+ 20             left_region = region_str.format(chrom, start, end - 2000)
+ 21         elif tract_size <= 2000:
+ 22             half_tract_size = round(tract_size / 2)
+ 23             left_len, right_len = half_tract_size, half_tract_size
+ 24             left_region = region_str.format(chrom, start, start + half_tract_size)
+ 25             right_region = region_str.format(chrom, start + half_tract_size, end)
+ 26         overall_region = region_str.format(chrom, start, end)
+ 27         total_snp_count = len([r for r in v.__call__(overall_region)])
+ 28         left_snp_count = len([r for r in v.__call__(left_region)])
+ 29         right_snp_count = len([r for r in v.__call__(right_region)])
+ 30         out_dict = deepcopy(line)
+ 31         out_dict['snp_count'] = total_snp_count
+ 32         out_dict['left_snp_count'], out_dict['right_snp_count'] = left_snp_count, right_snp_count
+ 33         out_dict['left_snp_density'] = left_snp_count / left_len
+ 34         out_dict['right_snp_density'] = right_snp_count / right_len
+ 35         writer.writerow(out_dict)
+100%|█████████████████████████████████████████████████████████████████████████| 16192/16192 [01:27<00:00, 185.63it/s]
+```
+
+now to have a look at this in the Rmd
+
+update - this looks good - going to repeat for 'left' 2 kb tracts (ie downstream of genes)
+for completeness
+
+```bash
+time python3.5 analysis/correlates/intergenic_tract_proximal.py \
+--fname data/correlates/intergenic_tract_rho.tsv \
+--table data/correlates/annotation_table_rho.txt.gz \
+--windowsize 2000 \
+--split left \
+--outfile data/correlates/intergenic_flanks_2kb_left.tsv
+```
+
+adding SNPs, as before (I honestly should have turned this into a script long ago...)
+
+```python
+>>> tract_fname = 'data/correlates/intergenic_flanks_2kb_left.tsv'
+>>> from tqdm import tqdm; from cyvcf2 import VCF; import csv; from copy import deepcopy
+>>> with open(tract_fname, 'r', newline='') as f:
+  2     tract_lines = [line for line in csv.DictReader(f, delimiter='\t')]
+>>> fieldnames = ['chrom', 'start', 'end', 'tract_size', 'windowsize', 'left_vals', 'left_count',
+  2 'left_window', 'right_vals', 'right_count', 'right_window']
+  3 with open('data/correlates/intergenic_flanks_2kb_left_snps.tsv', 'w') as f:
+  4     fieldnames.extend(['snp_count', 'left_snp_count', 'left_snp_density',
+  5                        'right_snp_count', 'right_snp_density'])
+  6     writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter='\t')
+  7     writer.writeheader()
+  8     vcf_fname = 'data/references/vcf/filtered/all_chrom.vcf.gz'
+  9     v = VCF(vcf_fname)
+ 10     for line in tqdm(tract_lines):
+ 11         chrom, start, end = line['chrom'], int(line['start']), int(line['end'])
+ 12         tract_size = int(line['tract_size'])
+ 13         region_str = '{}:{}-{}'
+ 14         if tract_size > 4000:
+ 15             left_len, right_len = 2000, 2000
+ 16             left_region = region_str.format(chrom, start, start + 2000)
+ 17             right_region = region_str.format(chrom, end - 2000, end)
+ 18         elif 2000 < tract_size <= 4000:
+ 19             left_len = 2000
+ 20             right_len = tract_size - 2000
+ 21             left_region = region_str.format(chrom, start, start + 2000)
+ 22             right_region = region_str.format(chrom, start + 2000, end)
+ 23         elif tract_size <= 2000:
+ 24             half_tract_size = round(tract_size / 2)
+ 25             left_len, right_len = half_tract_size, half_tract_size
+ 26             left_region = region_str.format(chrom, start, start + half_tract_size)
+ 27             right_region = region_str.format(chrom, start + half_tract_size, end)
+ 28         overall_region = region_str.format(chrom, start, end)
+ 29         total_snp_count = len([r for r in v.__call__(overall_region)])
+ 30         left_snp_count = len([r for r in v.__call__(left_region)])
+ 31         right_snp_count = len([r for r in v.__call__(right_region)])
+ 32         out_dict = deepcopy(line)
+ 33         out_dict['snp_count'] = total_snp_count
+ 34         out_dict['left_snp_count'], out_dict['right_snp_count'] = left_snp_count, right_snp_count
+ 35         out_dict['left_snp_density'] = left_snp_count / left_len
+ 36         out_dict['right_snp_density'] = right_snp_count / right_len
+ 37         writer.writerow(out_dict)
+100%|█████████████████████████████████████████████████████████████████████████| 16192/16192 [01:21<00:00, 199.17it/s]
+```
+
+## 15/1/2020
+
+redoing hotspot enrichment w/ the new hotspot dataset
+
+moved the older files into `data/correlates/hotspot_enrichment/old`
+
+```bash
+parallel -j 17 -i sh -c \
+'time python3.5 analysis/correlates/hotspot_annotation.py \
+--filename data/ldhelmet/block_10/chromosome_{}_summarised.txt \
+--table data/correlates/annotation_table_rho.txt.gz \
+--chrom chromosome_{} \
+--out data/correlates/hotspot_enrichment/chromosome_{}.txt' -- {1..17}
+```
+
+took 8.5 min - nice - off we go to rerun `hotspot_enrichment_analysis.Rmd` with
+these new files
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
