@@ -1,1 +1,9 @@
-# reinhardtii-ldhelmet
+# Recombination rate variation and infrequent sex influence genetic diversity in _Chlamydomonas reinhardtii_
+
+## Ahmed R Hasan, Rob W Ness
+
+Published in [_Genome Biology and Evolution_](https://academic.oup.com/gbe/article/12/4/370/5809146), March 2020.
+
+Recombination confers a major evolutionary advantage by breaking up linkage disequilibrium between harmful and beneficial mutations, thereby facilitating selection. However, in species that are only periodically sexual, such as many microbial eukaryotes, the realized rate of recombination is also affected by the frequency of sex, meaning that infrequent sex can increase the effects of selection at linked sites despite high recombination rates. Despite this, the rate of sex of most facultatively sexual species is unknown. Here, we use genomewide patterns of linkage disequilibrium to infer fine-scale recombination rate variation in the genome of the facultatively sexual green alga Chlamydomonas reinhardtii. We observe recombination rate variation of up to two orders of magnitude and find evidence of recombination hotspots across the genome. Recombination rate is highest flanking genes, consistent with trends observed in other nonmammalian organisms, though intergenic recombination rates vary by intergenic tract length. We also find a positive relationship between nucleotide diversity and physical recombination rate, suggesting a widespread influence of selection at linked sites in the genome. Finally, we use estimates of the effective rate of recombination to calculate the rate of sex that occurs in natural populations, estimating a sexual cycle roughly every 840 generations. We argue that the relatively infrequent rate of sex and large effective population size creates a population genetic environment that increases the influence of selection on linked sites across the genome.
+
+See also: [simulations repo](https://github.com/aays/ldhelmet-sims)
